@@ -20,7 +20,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
-import type UserRole from "@/lib/generated/prisma/UserRole";
+import type { UserRole } from "@/lib/enums/UserRole";
 
 export default function RegisterPage() {
   const router = useRouter();

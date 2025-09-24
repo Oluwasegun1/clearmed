@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AuthStatus } from "@/lib/generated/prisma";
+import { AuthStatus } from "@/lib/enums/AuthStatus";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 

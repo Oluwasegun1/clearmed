@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthorizationService } from "@/lib/services/authorization-service";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PrismaClient } from "@/lib/generated/prisma";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 const authService = new AuthorizationService();
 

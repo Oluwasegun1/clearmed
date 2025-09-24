@@ -1,6 +1,4 @@
-const { PrismaClient } = require('../lib/generated/prisma');
-
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 async function createTestData() {
   try {

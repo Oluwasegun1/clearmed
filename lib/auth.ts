@@ -1,11 +1,9 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { PrismaClient } from "@/lib/generated/prisma";
 import UserRole from "@/lib/generated/prisma/UserRole";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 // Get the current session
 export async function getSession() {

@@ -1,8 +1,7 @@
-import { PrismaClient, AuthStatus } from "@/lib/generated/prisma";
+import { AuthStatus } from "@/lib/generated/prisma";
 import UserRole from "@/lib/generated/prisma/UserRole";
 import { v4 as uuidv4 } from "uuid";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 interface CreateAuthorizationRequestParams {
   patientId: string;

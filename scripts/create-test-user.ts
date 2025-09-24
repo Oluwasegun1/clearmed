@@ -1,7 +1,5 @@
-import { PrismaClient } from '@/lib/generated/prisma';
+import { prisma } from '@/lib/prisma';
 import { UserRole } from '../lib/generated/prisma/UserRole';
-
-const prisma = new PrismaClient();
 
 async function createUser() {
   try {

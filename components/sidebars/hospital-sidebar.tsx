@@ -31,7 +31,7 @@ import {
   Microscope,
   Upload,
 } from "lucide-react";
-import { UserRole } from "@/lib/generated/prisma/UserRole";
+import { UserRole } from "@/lib/enums/UserRole";
 
 interface HospitalSidebarProps {
   currentPath?: string;
