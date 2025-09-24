@@ -1,0 +1,346 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// User model with role-based access control
+enum UserRole {
+  PATIENT
+  DOCTOR
+  HOSPITAL_ADMIN
+  PHARMACY
+  LAB
+  HMO_STAFF
+  HMO_ADMIN
+  SYSTEM_ADMIN
+}
+
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  password          String
+  role              UserRole
+  firstName         String
+  lastName          String
+  phoneNumber       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  isActive          Boolean           @default(true)
+  lastLogin         DateTime?
+  
+  // Relations based on role
+  patient           Patient?          // If role is PATIENT
+  hospitalStaff     HospitalStaff?    // If role is DOCTOR, HOSPITAL_ADMIN, PHARMACY, or LAB
+  hmoStaff          HMOStaff?         // If role is HMO_STAFF or HMO_ADMIN
+  
+  // Common relations
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+}
+
+model Patient {
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hmoId             String
+  hmo               HMO               @relation(fields: [hmoId], references: [id])
+  membershipNumber  String            @unique
+  coveragePlanId    String
+  coveragePlan      CoveragePlan      @relation(fields: [coveragePlanId], references: [id])
+  dateOfBirth       DateTime
+  gender            String
+  address           String?
+  
+  // Relations
+  authRequests      AuthorizationRequest[]
+  dependents        Dependent[]
+}
+
+model Dependent {
+  id                String            @id @default(cuid())
+  patientId         String
+  patient           Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  gender            String
+  relationship      String
+  
+  // Relations
+  authRequests      AuthorizationRequest[]
+}
+
+model Hospital {
+  id                String            @id @default(cuid())
+  name              String
+  address           String
+  city              String
+  state             String
+  phoneNumber       String
+  email             String
+  licenseNumber     String            @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  isActive          Boolean           @default(true)
+  
+  // Relations
+  staff             HospitalStaff[]
+  departments       Department[]
+  hmoContracts      HMOHospitalContract[]
+  authRequests      AuthorizationRequest[]
+}
+
+model Department {
+  id                String            @id @default(cuid())
+  hospitalId        String
+  hospital          Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  
+  // Relations
+  staff             HospitalStaff[]
+  services          Service[]
+}
+
+model HospitalStaff {
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hospitalId        String
+  hospital          Hospital          @relation(fields: [hospitalId], references: [id])
+  departmentId      String?
+  department        Department?       @relation(fields: [departmentId], references: [id])
+  staffId           String            @unique
+  position          String
+  specialization    String?
+  
+  // Relations
+  authRequests      AuthorizationRequest[]  // Requests created by this staff
+  serviceDeliveries ServiceDelivery[]      // Services delivered by this staff
+}
+
+model HMO {
+  id                String            @id @default(cuid())
+  name              String
+  address           String
+  city              String
+  state             String
+  phoneNumber       String
+  email             String
+  licenseNumber     String            @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  isActive          Boolean           @default(true)
+  
+  // Relations
+  staff             HMOStaff[]
+  coveragePlans     CoveragePlan[]
+  hospitalContracts HMOHospitalContract[]
+  patients          Patient[]
+}
+
+model HMOStaff {
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hmoId             String
+  hmo               HMO               @relation(fields: [hmoId], references: [id])
+  staffId           String            @unique
+  position          String
+  
+  // Relations
+  authReviews       AuthorizationReview[]
+}
+
+model CoveragePlan {
+  id                String            @id @default(cuid())
+  hmoId             String
+  hmo               HMO               @relation(fields: [hmoId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  isActive          Boolean           @default(true)
+  
+  // Relations
+  patients          Patient[]
+  coverageRules     CoverageRule[]
+}
+
+model CoverageRule {
+  id                String            @id @default(cuid())
+  coveragePlanId    String
+  coveragePlan      CoveragePlan      @relation(fields: [coveragePlanId], references: [id], onDelete: Cascade)
+  serviceId         String
+  service           Service           @relation(fields: [serviceId], references: [id])
+  coveragePercentage Int
+  requiresPreAuth   Boolean           @default(false)
+  annualLimit       Int?              // Limit in Naira or null for unlimited
+  waitingPeriod     Int               @default(0) // In days
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model HMOHospitalContract {
+  id                String            @id @default(cuid())
+  hmoId             String
+  hmo               HMO               @relation(fields: [hmoId], references: [id])
+  hospitalId        String
+  hospital          Hospital          @relation(fields: [hospitalId], references: [id])
+  startDate         DateTime
+  endDate           DateTime
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  // Relations
+  contractServices  ContractService[]
+}
+
+model ContractService {
+  id                String            @id @default(cuid())
+  contractId        String
+  contract          HMOHospitalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  serviceId         String
+  service           Service           @relation(fields: [serviceId], references: [id])
+  agreedPrice       Float
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model Service {
+  id                String            @id @default(cuid())
+  name              String
+  description       String?
+  category          String            // e.g., Consultation, Medication, Lab Test, Surgery
+  code              String            @unique
+  standardPrice     Float
+  departmentId      String?
+  department        Department?       @relation(fields: [departmentId], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  isActive          Boolean           @default(true)
+  
+  // Relations
+  coverageRules     CoverageRule[]
+  contractServices  ContractService[]
+  authRequests      AuthorizationRequest[]
+  serviceDeliveries ServiceDelivery[]
+}
+
+enum AuthStatus {
+  PENDING
+  AUTO_APPROVED
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+model AuthorizationRequest {
+  id                String            @id @default(cuid())
+  patientId         String?
+  patient           Patient?          @relation(fields: [patientId], references: [id])
+  dependentId       String?
+  dependent         Dependent?        @relation(fields: [dependentId], references: [id])
+  hospitalId        String
+  hospital          Hospital          @relation(fields: [hospitalId], references: [id])
+  requestedById     String
+  requestedBy       HospitalStaff     @relation(fields: [requestedById], references: [id])
+  serviceId         String
+  service           Service           @relation(fields: [serviceId], references: [id])
+  diagnosisCode     String?
+  diagnosisNotes    String?
+  quantity          Int               @default(1)
+  status            AuthStatus        @default(PENDING)
+  authCode          String?           @unique
+  requestDate       DateTime          @default(now())
+  expiryDate        DateTime?
+  
+  // Relations
+  reviews           AuthorizationReview[]
+  serviceDelivery   ServiceDelivery?
+}
+
+model AuthorizationReview {
+  id                String            @id @default(cuid())
+  authRequestId     String
+  authRequest       AuthorizationRequest @relation(fields: [authRequestId], references: [id], onDelete: Cascade)
+  reviewedById      String
+  reviewedBy        HMOStaff          @relation(fields: [reviewedById], references: [id])
+  decision          AuthStatus
+  comments          String?
+  reviewDate        DateTime          @default(now())
+}
+
+model ServiceDelivery {
+  id                String            @id @default(cuid())
+  authRequestId     String            @unique
+  authRequest       AuthorizationRequest @relation(fields: [authRequestId], references: [id])
+  deliveredById     String
+  deliveredBy       HospitalStaff     @relation(fields: [deliveredById], references: [id])
+  serviceId         String
+  service           Service           @relation(fields: [serviceId], references: [id])
+  deliveryDate      DateTime          @default(now())
+  notes             String?
+  actualQuantity    Int
+  actualCost        Float
+}
+
+enum NotificationType {
+  AUTH_REQUEST
+  AUTH_APPROVAL
+  AUTH_REJECTION
+  SERVICE_DELIVERY
+  COVERAGE_UPDATE
+  SYSTEM
+}
+
+model Notification {
+  id                String            @id @default(cuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type              NotificationType
+  title             String
+  message           String
+  isRead            Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  relatedEntityId   String?           // Could be authRequestId, serviceDeliveryId, etc.
+  relatedEntityType String?           // Type of the related entity
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  AUTH_REQUEST
+  AUTH_REVIEW
+  SERVICE_DELIVERY
+}
+
+model AuditLog {
+  id                String            @id @default(cuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id])
+  action            AuditAction
+  entityType        String            // e.g., "User", "AuthorizationRequest", "Service"
+  entityId          String
+  details           String?
+  ipAddress         String?
+  userAgent         String?
+  timestamp         DateTime          @default(now())
+}
