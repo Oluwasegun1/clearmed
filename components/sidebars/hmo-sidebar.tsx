@@ -27,6 +27,7 @@ import {
   ChartBar,
   Hospital,
   UserRound,
+  LogOut,
 } from "lucide-react";
 
 interface HMOSidebarProps {
@@ -171,6 +172,12 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
             isActive={currentPath === "/hmo/settings"}
           >
             Settings
+          </SidebarNavItem>
+          <SidebarNavItem
+            href="/api/auth/signout?callbackUrl=/auth/login"
+            icon={<LogOut className="h-4 w-4" />}
+          >
+            Sign out
           </SidebarNavItem>
         </SidebarNav>
       </SidebarFooter>

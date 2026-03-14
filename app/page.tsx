@@ -25,8 +25,8 @@ export default function Home() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-hidden">
-      <div className="fixed inset-0 grid-pattern opacity-30" />
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden overflow-y-auto">
+      <div className="fixed inset-0 grid-pattern opacity-30 pointer-events-none" />
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(6)].map((_, i) => (

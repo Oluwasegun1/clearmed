@@ -116,9 +116,9 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-hidden relative">
-      {/* Background effects */}
-      <div className="fixed inset-0 grid-pattern opacity-20" />
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden overflow-y-auto relative">
+      {/* Background effects - pointer-events-none so they don't block clicks/scroll */}
+      <div className="fixed inset-0 grid-pattern opacity-20 pointer-events-none" />
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(8)].map((_, i) => (

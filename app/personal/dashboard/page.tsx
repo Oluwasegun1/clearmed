@@ -61,11 +61,11 @@ export default function PersonalDashboard() {
 
   return (
     <PersonalSidebarWrapper currentPath="/personal/dashboard">
-      <div className="min-h-screen bg-background">
-        <div className="fixed inset-0 professional-grid opacity-40" />
+      <div className="min-h-screen bg-background overflow-x-hidden overflow-y-auto">
+        <div className="fixed inset-0 professional-grid opacity-40 pointer-events-none" />
 
-        <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-primary/3 rounded-full blur-3xl" />
-        <div className="fixed bottom-0 left-0 w-[500px] h-[500px] bg-accent/3 rounded-full blur-3xl" />
+        <div className="fixed top-0 right-0 w-[600px] h-[600px] bg-primary/3 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed bottom-0 left-0 w-[500px] h-[500px] bg-accent/3 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative">
           <div className="border-b border-border/50 bg-card/30 backdrop-blur-xl">

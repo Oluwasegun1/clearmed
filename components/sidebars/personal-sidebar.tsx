@@ -27,6 +27,7 @@ import {
   PlusCircle,
   ClipboardList,
   UserCog,
+  LogOut,
 } from "lucide-react";
 
 interface PersonalSidebarProps {
@@ -186,6 +187,12 @@ export function PersonalSidebar({ currentPath }: PersonalSidebarProps) {
             isActive={currentPath === "/personal/profile"}
           >
             Profile & Settings
+          </SidebarNavItem>
+          <SidebarNavItem
+            href="/api/auth/signout?callbackUrl=/auth/login"
+            icon={<LogOut className="h-4 w-4" />}
+          >
+            Sign out
           </SidebarNavItem>
         </SidebarNav>
       </SidebarFooter>

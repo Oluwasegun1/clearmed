@@ -21,22 +21,50 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
-  // If authenticated but trying to access auth pages (excluding root and sidebar-demo)
-  if (token && isPublicRoute && !pathname.startsWith("/sidebar-demo") && pathname !== "/") {
+  // Authenticated user on home: redirect to role-specific dashboard
+  if (token && pathname === "/") {
     const role = token.role as string;
+    if (role === "PATIENT") {
+      return NextResponse.redirect(new URL("/personal/dashboard", request.url));
+    }
+    if (
+      role === "DOCTOR" ||
+      role === "HOSPITAL_ADMIN" ||
+      role === "PHARMACY" ||
+      role === "LAB"
+    ) {
+      return NextResponse.redirect(new URL("/hospital/dashboard", request.url));
+    }
+    if (role?.startsWith("HMO_")) {
+      return NextResponse.redirect(new URL("/hmo/dashboard", request.url));
+    }
+    if (role === "SYSTEM_ADMIN") {
+      return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+    }
+  }
 
+  // Allow /auth/login when authenticated so user can sign out and sign in as another role.
+  // Other auth pages (register, forgot-password): redirect to role dashboard.
+  if (token && isPublicRoute && !pathname.startsWith("/sidebar-demo") && pathname !== "/") {
+    if (pathname.startsWith("/auth/login")) {
+      return NextResponse.next();
+    }
+    const role = token.role as string;
     if (role.includes("PATIENT")) {
       return NextResponse.redirect(new URL("/personal/dashboard", request.url));
-    } else if (
+    }
+    if (
       role.includes("DOCTOR") ||
       role.includes("HOSPITAL_ADMIN") ||
       role.includes("PHARMACY") ||
       role.includes("LAB")
     ) {
       return NextResponse.redirect(new URL("/hospital/dashboard", request.url));
-    } else if (role.includes("HMO_")) {
+    }
+    if (role.includes("HMO_")) {
       return NextResponse.redirect(new URL("/hmo/dashboard", request.url));
-    } else if (role === "SYSTEM_ADMIN") {
+    }
+    if (role === "SYSTEM_ADMIN") {
       return NextResponse.redirect(new URL("/admin/dashboard", request.url));
     }
   }

@@ -2,8 +2,8 @@
 
 import type React from "react";
 
-import { useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
+import { useEffect, useState, useRef } from "react";
+import { signIn, signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,8 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
-  const role = searchParams.get("role");
+  const roleParam = searchParams.get("role");
+  const callbackUrl = searchParams.get("callbackUrl") ?? "";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,11 +35,39 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
-  // Set default credentials based on role query parameter
+
+  // Role-to-dashboard path mapping (must match middleware and lib/auth)
+  const getRedirectPathForRole = (role: string): string => {
+    switch (role) {
+      case "PATIENT":
+        return "/personal/dashboard";
+      case "DOCTOR":
+      case "HOSPITAL_ADMIN":
+      case "PHARMACY":
+      case "LAB":
+        return "/hospital/dashboard";
+      case "HMO_STAFF":
+      case "HMO_ADMIN":
+        return "/hmo/dashboard";
+      case "SYSTEM_ADMIN":
+        return "/admin/dashboard";
+      default:
+        return "/";
+    }
+  };
+
+  // Clear any existing session when landing on login so user can sign in as a different role
+  const hasClearedSession = useRef(false);
   useEffect(() => {
-    if (role) {
-      switch (role) {
+    if (hasClearedSession.current) return;
+    hasClearedSession.current = true;
+    signOut({ redirect: false }).catch(() => {});
+  }, []);
+
+  // Set default credentials based on role query parameter (dev/demo quick login)
+  useEffect(() => {
+    if (roleParam) {
+      switch (roleParam) {
         case "patient":
           setEmail("patient@example.com");
           setPassword("password123");
@@ -55,59 +84,62 @@ export default function LoginPage() {
           setEmail("hmo@example.com");
           setPassword("password123");
           break;
+        case "admin":
+          setEmail("admin@example.com");
+          setPassword("password123");
+          break;
       }
     }
-  }, [role]);
+  }, [roleParam]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
+    setIsLoading(true);
 
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
 
-      if (!result || result.error) {
-        const errorMessage = "Invalid email or password";
-        setError(errorMessage);
-        toast.error(errorMessage);
-        setIsLoading(false);
-        return;
-      }
-
-      // Reset loading state before redirecting
+    if (result?.error) {
+      toast.error(result.error);
+      setError(result.error);
       setIsLoading(false);
-      toast.success("Successfully logged in!");
-
-      // Determine redirect based on user role
-      setTimeout(() => {
-        // Get the current URL's protocol, hostname, and port
-        const baseUrl = window.location.origin;
-        
-        // Redirect based on user role (handled by middleware)
-        window.location.href = baseUrl;
-      }, 1500);
-    } catch (error: unknown) {
-      let message = "An error occurred. Please try again.";
-
-      if (error instanceof Error) {
-        message = error.message;
-      }
-
-      setError(message);
-      toast.error(message);
-      setIsLoading(false);
+      return;
     }
+
+    // Fetch fresh session (no cache) so we get the newly signed-in user's role
+    const sessionRes = await fetch(
+      `/api/auth/session?t=${Date.now()}`,
+      { cache: "no-store", credentials: "include" }
+    );
+    const session = await sessionRes.json();
+    const userRole = session?.user?.role as string | undefined;
+
+    if (!userRole) {
+      toast.error("Session error. Please try again.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Use callbackUrl only if it's a relative path (same-origin) and not auth page
+    const isSafeCallback =
+      callbackUrl &&
+      callbackUrl.startsWith("/") &&
+      !callbackUrl.startsWith("/auth/");
+    const redirectPath = isSafeCallback
+      ? callbackUrl
+      : getRedirectPathForRole(userRole);
+
+    router.push(redirectPath);
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-hidden relative">
-      {/* Background effects */}
-      <div className="fixed inset-0 grid-pattern opacity-20" />
+    <div className="min-h-screen bg-background text-foreground overflow-x-hidden overflow-y-auto relative">
+      {/* Background effects - pointer-events-none so they don't block clicks/scroll */}
+      <div className="fixed inset-0 grid-pattern opacity-20 pointer-events-none" />
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         {[...Array(6)].map((_, i) => (
@@ -298,29 +330,36 @@ export default function LoginPage() {
                   </div>
                 )}
               </Button>
-              
+
               {/* Quick Login Options */}
               <div className="mt-6">
-                <p className="text-sm text-center mb-3 text-muted-foreground">Quick login options:</p>
+                <p className="text-sm text-center mb-3 text-muted-foreground">
+                  Quick login options:
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   <Link href="/auth/login?role=patient">
                     <Button variant="outline" size="sm" className="w-full">
-                      Patient Login
+                      Patient
                     </Button>
                   </Link>
                   <Link href="/auth/login?role=doctor">
                     <Button variant="outline" size="sm" className="w-full">
-                      Doctor Login
+                      Doctor
                     </Button>
                   </Link>
                   <Link href="/auth/login?role=hospital">
                     <Button variant="outline" size="sm" className="w-full">
-                      Hospital Admin
+                      Hospital
                     </Button>
                   </Link>
                   <Link href="/auth/login?role=hmo">
                     <Button variant="outline" size="sm" className="w-full">
-                      HMO Staff
+                      HMO
+                    </Button>
+                  </Link>
+                  <Link href="/auth/login?role=admin">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Admin
                     </Button>
                   </Link>
                 </div>

@@ -30,6 +30,7 @@ import {
   ClipboardCheck,
   Microscope,
   Upload,
+  LogOut,
 } from "lucide-react";
 import { UserRole } from "@/lib/enums/UserRole";
 
@@ -274,6 +275,12 @@ export function HospitalSidebar({
             isActive={currentPath === "/hospital/settings"}
           >
             Settings
+          </SidebarNavItem>
+          <SidebarNavItem
+            href="/api/auth/signout?callbackUrl=/auth/login"
+            icon={<LogOut className="h-4 w-4" />}
+          >
+            Sign out
           </SidebarNavItem>
         </SidebarNav>
       </SidebarFooter>
