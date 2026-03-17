@@ -425,9 +425,7 @@ export default function PersonalDashboard() {
                     <Button
                       variant="ghost"
                       className="w-full justify-start h-auto p-3 bg-card/50 hover:bg-card/80 border border-border/50"
-                      onClick={() =>
-                        router.push("/personal/authorizations/new")
-                      }
+                      onClick={() => router.push("/personal/request/new")}
                     >
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
@@ -435,10 +433,10 @@ export default function PersonalDashboard() {
                         </div>
                         <div className="text-left">
                           <p className="text-sm font-medium text-foreground">
-                            Authorization
+                            Make a Request
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Request approval
+                            HMO coverage or hospital
                           </p>
                         </div>
                       </div>
@@ -673,11 +671,11 @@ export default function PersonalDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push("/personal/authorizations/new")}
+                  onClick={() => router.push("/personal/request/new")}
                   className="h-8"
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  New Request
+                  Make a Request
                 </Button>
               </div>
               <AuthorizationList />
