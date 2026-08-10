@@ -10,11 +10,32 @@ import AuthorizationCard from "@/components/ui/authorization-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AuthStatus } from "@/lib/enums/AuthStatus";
+
+interface AuthorizationItem {
+  id: string;
+  authorizationCode?: string | null;
+  patient?: {
+    user?: {
+      firstName?: string;
+      lastName?: string;
+      name?: string;
+    } | null;
+  } | null;
+  hospital?: {
+    name?: string;
+  } | null;
+  diagnosis: string;
+  services?: string | string[] | null;
+  status: AuthStatus;
+  createdAt: string | Date;
+  reviewedAt?: string | Date | null;
+}
 
 export default function AuthorizationsPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const [authorizations, setAuthorizations] = useState([]);
+  const [authorizations, setAuthorizations] = useState<AuthorizationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("all");
@@ -29,9 +50,10 @@ export default function AuthorizationsPage() {
 
         const data = await response.json();
         setAuthorizations(data);
-      } catch (error) {
-        console.error("Error fetching authorizations:", error);
-        setError(error.message || "Failed to load authorizations");
+      } catch (err: unknown) {
+        console.error("Error fetching authorizations:", err);
+        const message = err instanceof Error ? err.message : "Failed to load authorizations";
+        setError(message);
       } finally {
         setIsLoading(false);
       }
@@ -42,7 +64,9 @@ export default function AuthorizationsPage() {
 
   const filteredAuthorizations = () => {
     if (activeTab === "all") return authorizations;
-    return authorizations.filter((auth) => auth.status === activeTab.toUpperCase());
+    return authorizations.filter(
+      (auth) => auth.status === activeTab.toUpperCase()
+    );
   };
 
   return (
@@ -80,11 +104,11 @@ export default function AuthorizationsPage() {
               <Card>
                 <CardContent className="p-6 text-center">
                   <div className="flex flex-col items-center justify-center py-8">
-                    <FileText className="h-12 w-12 text-gray-400 mb-4" />
+                    <FileText className="h-12 w-12 text-muted-foreground mb-4" />
                     <h3 className="text-lg font-medium mb-2">
                       No authorization requests found
                     </h3>
-                    <p className="text-gray-500 mb-4">
+                    <p className="text-muted-foreground mb-4">
                       {activeTab === "all"
                         ? "You haven't created any authorization requests yet."
                         : `You don't have any ${activeTab.toLowerCase()} authorization requests.`}
@@ -102,10 +126,30 @@ export default function AuthorizationsPage() {
                     key={auth.id}
                     id={auth.id}
                     authorizationCode={auth.authorizationCode || ""}
-                    patientName={auth.patient?.user?.name || "Unknown"}
+                    patientName={
+                      auth.patient?.user?.name ||
+                      `${auth.patient?.user?.firstName || ""} ${auth.patient?.user?.lastName || ""}`.trim() ||
+                      "Patient"
+                    }
                     hospitalName={auth.hospital?.name || "Unknown Hospital"}
                     diagnosis={auth.diagnosis}
-                    services={auth.services || []}
+                    services={
+                      Array.isArray(auth.services)
+                        ? auth.services.map((s, idx) =>
+                            typeof s === "string"
+                              ? { id: `${auth.id}-${idx}`, name: s, cost: 0 }
+                              : s
+                          )
+                        : auth.services
+                        ? [
+                            {
+                              id: `${auth.id}-0`,
+                              name: String(auth.services),
+                              cost: 0,
+                            },
+                          ]
+                        : []
+                    }
                     status={auth.status}
                     createdAt={new Date(auth.createdAt)}
                     reviewedAt={auth.reviewedAt ? new Date(auth.reviewedAt) : null}

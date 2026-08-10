@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { PersonalSidebarWrapper } from "@/components/sidebars";
@@ -12,6 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+interface Hospital {
+  id: string;
+  name: string;
+}
 
 export default function NewAuthorizationRequest() {
   const router = useRouter();
@@ -27,10 +32,10 @@ export default function NewAuthorizationRequest() {
     notes: "",
   });
 
-  const [hospitals, setHospitals] = useState([]);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
 
   // Fetch hospitals when component mounts
-  useState(() => {
+  useEffect(() => {
     const fetchHospitals = async () => {
       try {
         const response = await fetch("/api/hospitals");
@@ -38,15 +43,17 @@ export default function NewAuthorizationRequest() {
           const data = await response.json();
           setHospitals(data);
         }
-      } catch (error) {
-        console.error("Error fetching hospitals:", error);
+      } catch (err: unknown) {
+        console.error("Error fetching hospitals:", err);
       }
     };
 
     fetchHospitals();
   }, []);
 
-  const handleChange = (e) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -54,14 +61,14 @@ export default function NewAuthorizationRequest() {
     }));
   };
 
-  const handleSelectChange = (name, value) => {
+  const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
@@ -96,8 +103,9 @@ export default function NewAuthorizationRequest() {
       setTimeout(() => {
         router.push("/personal/dashboard");
       }, 2000);
-    } catch (error) {
-      setError(error.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -120,8 +128,8 @@ export default function NewAuthorizationRequest() {
         </div>
 
         {success ? (
-          <Alert className="bg-green-50 border-green-200">
-            <AlertCircle className="h-4 w-4 text-green-600" />
+          <Alert className="bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-300">
+            <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             <AlertTitle>Success</AlertTitle>
             <AlertDescription>
               Your authorization request has been submitted successfully. You will be redirected to the dashboard.
