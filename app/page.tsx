@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,17 +11,8 @@ import {
   CheckCircle,
   Star,
 } from "lucide-react";
-import { useState, useEffect } from "react";
 
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
-
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden overflow-y-auto">
       <div className="fixed inset-0 grid-pattern opacity-30 pointer-events-none" />
@@ -272,7 +261,7 @@ export default function Home() {
               <span className="font-semibold">ClearMed</span>
             </div>
             <div className="text-sm text-muted-foreground">
-              © 2025 ClearMed. Revolutionizing healthcare authorization.
+              © 2026 ClearMed. Revolutionizing healthcare authorization.
             </div>
           </div>
         </div>

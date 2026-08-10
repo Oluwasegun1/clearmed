@@ -3,82 +3,102 @@ import { AuthorizationService } from "@/lib/services/authorization-service";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { AuthStatus } from "@/lib/enums/AuthStatus";
 
 const authService = new AuthorizationService();
 
-// Create a new authorization request
 export async function POST(request: NextRequest) {
   try {
-    // Get the authenticated user
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Parse the request body
     const body = await request.json();
-    const { patientId, hospitalId, serviceIds, diagnosis, notes } = body;
+    const {
+      patientId,
+      dependentId,
+      hospitalId,
+      serviceId,
+      diagnosisCode,
+      diagnosisNotes,
+      quantity,
+    } = body;
 
-    // Validate required fields
-    if (!patientId || !hospitalId || !serviceIds || !diagnosis) {
+    if (!hospitalId || !serviceId) {
       return NextResponse.json(
-        { message: "Missing required fields" },
+        { message: "Missing required fields (hospitalId, serviceId)" },
         { status: 400 }
       );
     }
 
-    // Create the authorization request
+    // Find hospital staff ID or fallback
+    let staff = await prisma.hospitalStaff.findFirst({
+      where: { userId: session.user.id },
+    });
+
+    if (!staff) {
+      staff = await prisma.hospitalStaff.findFirst({
+        where: { hospitalId },
+      });
+    }
+
+    if (!staff) {
+      return NextResponse.json(
+        { message: "Hospital staff record not found to submit request" },
+        { status: 404 }
+      );
+    }
+
     const authRequest = await authService.createAuthorizationRequest({
       patientId,
+      dependentId,
       hospitalId,
-      requestedBy: session.user.id,
-      serviceIds,
-      diagnosis,
-      notes,
+      requestedById: staff.id,
+      serviceId,
+      diagnosisCode,
+      diagnosisNotes,
+      quantity: quantity ? Number(quantity) : 1,
     });
 
     return NextResponse.json(authRequest, { status: 201 });
   } catch (error: unknown) {
-    console.error("Error reviewing authorization request:", error);
-    let message = "Error reviewing authorization request";
-
+    console.error("Error creating authorization request:", error);
+    let message = "Error creating authorization request";
     if (error instanceof Error) {
       message = error.message;
     }
-
-    return NextResponse.json({ message, error }, { status: 500 });
+    return NextResponse.json({ message }, { status: 500 });
   }
 }
 
-// Get all authorization requests
 export async function GET(request: NextRequest) {
   try {
-    // Get the authenticated user
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get("status");
-    const patientId = searchParams.get("patientId");
-    const hospitalId = searchParams.get("hospitalId");
-    const hmoId = searchParams.get("hmoId");
+    const statusFilter = searchParams.get("status");
+    const patientIdFilter = searchParams.get("patientId");
+    const hospitalIdFilter = searchParams.get("hospitalId");
+    const hmoIdFilter = searchParams.get("hmoId");
 
-    // Build the query based on the user's role and filters
-    const query: Record<string, string> = {};
+    const where: any = {};
 
-    // Apply filters if provided
-    if (status) query.status = status;
-    if (patientId) query.patientId = patientId;
-    if (hospitalId) query.hospitalId = hospitalId;
-    if (hmoId) query.hmoId = hmoId;
+    if (statusFilter && statusFilter !== "ALL") {
+      where.status = statusFilter as AuthStatus;
+    }
+    if (patientIdFilter) where.patientId = patientIdFilter;
+    if (hospitalIdFilter) where.hospitalId = hospitalIdFilter;
+    if (hmoIdFilter) {
+      where.patient = { hmoId: hmoIdFilter };
+    }
 
-    // Role-based access control
     const userRole = session.user.role;
 
     if (userRole === "PATIENT") {
-      // Patients can only see their own requests
       const patient = await prisma.patient.findFirst({
         where: { userId: session.user.id },
       });
@@ -89,47 +109,32 @@ export async function GET(request: NextRequest) {
           { status: 404 }
         );
       }
-
-      query.patientId = patient.id;
+      where.patientId = patient.id;
     } else if (
       userRole === "DOCTOR" ||
       userRole === "HOSPITAL_ADMIN" ||
       userRole === "PHARMACY" ||
       userRole === "LAB"
     ) {
-      // Hospital staff can only see requests for their hospital
       const staff = await prisma.hospitalStaff.findFirst({
         where: { userId: session.user.id },
       });
 
-      if (!staff) {
-        return NextResponse.json(
-          { message: "Hospital staff record not found" },
-          { status: 404 }
-        );
+      if (staff) {
+        where.hospitalId = staff.hospitalId;
       }
-
-      query.hospitalId = staff.hospitalId;
     } else if (userRole === "HMO_STAFF" || userRole === "HMO_ADMIN") {
-      // HMO staff can only see requests for their HMO
       const staff = await prisma.hMOStaff.findFirst({
         where: { userId: session.user.id },
       });
 
-      if (!staff) {
-        return NextResponse.json(
-          { message: "HMO staff record not found" },
-          { status: 404 }
-        );
+      if (staff) {
+        where.patient = { hmoId: staff.hmoId };
       }
-
-      query.hmoId = staff.hmoId;
     }
-    // System admins can see all requests (no additional filters)
 
-    // Get the authorization requests
     const authRequests = await prisma.authorizationRequest.findMany({
-      where: query,
+      where,
       include: {
         patient: {
           include: {
@@ -140,36 +145,35 @@ export async function GET(request: NextRequest) {
                 email: true,
               },
             },
+            coveragePlan: true,
           },
         },
         hospital: true,
-        services: {
+        service: true,
+        requestedBy: {
           include: {
-            service: true,
+            user: true,
           },
         },
         reviews: {
           orderBy: {
             reviewDate: "desc",
-            id: "desc",
           },
           take: 1,
         },
       },
       orderBy: {
-        createdAt: "desc",
+        requestDate: "desc",
       },
     });
 
     return NextResponse.json(authRequests);
   } catch (error: unknown) {
-    console.error("Error reviewing authorization request:", error);
-    let message = "Error reviewing authorization request";
-
+    console.error("Error fetching authorization requests:", error);
+    let message = "Error fetching authorization requests";
     if (error instanceof Error) {
       message = error.message;
     }
-
-    return NextResponse.json({ message, error }, { status: 500 });
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

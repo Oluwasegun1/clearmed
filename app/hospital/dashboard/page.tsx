@@ -32,12 +32,22 @@ function MetricCard({
   icon,
   color = "primary",
 }: MetricCardProps) {
+  const colorClasses = {
+    primary: "bg-primary/10 text-primary",
+    green: "bg-green-500/10 text-green-600",
+    blue: "bg-blue-500/10 text-blue-600",
+    orange: "bg-orange-500/10 text-orange-600",
+  };
+
   return (
     <div className="rounded-lg border bg-card p-6 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
-            className={`flex h-10 w-10 items-center justify-center rounded-lg bg-${color}/10 text-${color}`}
+            className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+              colorClasses[color as keyof typeof colorClasses] ??
+              colorClasses.primary
+            }`}
           >
             {icon}
           </div>
@@ -109,7 +119,7 @@ function BedOccupancy() {
               <div className="flex items-center gap-2">
                 <span
                   className={`px-2 py-1 rounded-full text-xs font-medium ${getOccupancyColor(
-                    dept.occupancy
+                    dept.occupancy,
                   )}`}
                 >
                   {dept.occupancy}%
@@ -125,8 +135,8 @@ function BedOccupancy() {
                   dept.occupancy >= 90
                     ? "bg-red-500"
                     : dept.occupancy >= 75
-                    ? "bg-yellow-500"
-                    : "bg-green-500"
+                      ? "bg-yellow-500"
+                      : "bg-green-500"
                 }`}
                 style={{ width: `${dept.occupancy}%` }}
               ></div>
@@ -217,7 +227,7 @@ function RecentAdmissions() {
             <div className="text-right">
               <span
                 className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
-                  admission.priority
+                  admission.priority,
                 )}`}
               >
                 {admission.priority}

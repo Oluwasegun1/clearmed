@@ -7,6 +7,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarToggle,
+  SidebarMobileToggle,
   SidebarNav,
   SidebarNavItem,
   SidebarGroup,
@@ -196,7 +197,10 @@ export function HMOSidebarWrapper({
     <SidebarProvider>
       <div className="flex h-screen">
         <HMOSidebar currentPath={currentPath} />
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <main className="relative flex-1 overflow-hidden">
+          <SidebarMobileToggle />
+          {children}
+        </main>
       </div>
     </SidebarProvider>
   );

@@ -7,6 +7,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarToggle,
+  SidebarMobileToggle,
   SidebarNav,
   SidebarNavItem,
   SidebarGroup,
@@ -211,12 +212,12 @@ export function HospitalSidebar({
     role === UserRole.DOCTOR
       ? doctorNavigationItems
       : role === UserRole.HOSPITAL_ADMIN
-      ? adminNavigationItems
-      : role === UserRole.PHARMACY
-      ? pharmacyNavigationItems
-      : role === UserRole.LAB
-      ? labNavigationItems
-      : doctorNavigationItems; // Default to doctor navigation
+        ? adminNavigationItems
+        : role === UserRole.PHARMACY
+          ? pharmacyNavigationItems
+          : role === UserRole.LAB
+            ? labNavigationItems
+            : doctorNavigationItems; // Default to doctor navigation
 
   return (
     <Sidebar>
@@ -301,8 +302,12 @@ export function HospitalSidebarWrapper({
     <SidebarProvider>
       <div className="flex h-screen">
         <HospitalSidebar currentPath={currentPath} role={role} />
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <main className="relative flex-1 overflow-hidden">
+          <SidebarMobileToggle />
+          {children}
+        </main>
       </div>
     </SidebarProvider>
   );
 }
+

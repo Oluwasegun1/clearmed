@@ -3,7 +3,7 @@ import { AuthorizationService } from "@/lib/services/authorization-service";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 // import { PrismaClient } from "@/lib/generated/prisma";
-import UserRole from "@/lib/generated/prisma/UserRole";
+import UserRole from "@/lib/enums/UserRole";
 
 // const prisma = new PrismaClient();
 const authService = new AuthorizationService();
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json(
         { message: "Only hospital staff can validate authorization codes" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -40,14 +40,14 @@ export async function POST(request: NextRequest) {
     if (!authorizationCode || !serviceId) {
       return NextResponse.json(
         { message: "Authorization code and service ID are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Validate the authorization code
     const validation = await authService.validateAuthorizationCode(
       authorizationCode,
-      serviceId
+      serviceId,
     );
 
     return NextResponse.json(validation);

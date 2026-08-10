@@ -2,24 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthorizationService } from "@/lib/services/authorization-service";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import UserRole from "@/lib/generated/prisma/UserRole";
-import { AuthStatus } from "@/lib/generated/prisma";
+import { UserRole } from "@/lib/enums/UserRole";
+import { AuthStatus } from "@/lib/enums/AuthStatus";
 import { prisma } from "@/lib/prisma";
+
 const authService = new AuthorizationService();
 
-// Review an authorization request
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Get the authenticated user
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Check if user is HMO staff or admin
     const userRole = session.user.role as UserRole;
     if (
       userRole !== "HMO_STAFF" &&
@@ -32,14 +30,10 @@ export async function POST(
       );
     }
 
-    // Get the request ID from the URL
-    const requestId = params.id;
-
-    // Parse the request body
+    const { id: requestId } = await context.params;
     const body = await request.json();
     const { status, notes } = body;
 
-    // Validate required fields
     if (!status) {
       return NextResponse.json(
         { message: "Status is required" },
@@ -47,7 +41,8 @@ export async function POST(
       );
     }
 
-    // If HMO staff, check if they belong to the correct HMO
+    let reviewerStaffId = session.user.id;
+
     if (userRole === "HMO_STAFF" || userRole === "HMO_ADMIN") {
       const staff = await prisma.hMOStaff.findFirst({
         where: { userId: session.user.id },
@@ -55,13 +50,15 @@ export async function POST(
 
       if (!staff) {
         return NextResponse.json(
-          { message: "HMO staff record not found" },
+          { message: "HMO staff record not found for user" },
           { status: 404 }
         );
       }
+      reviewerStaffId = staff.id;
 
       const authRequest = await prisma.authorizationRequest.findUnique({
         where: { id: requestId },
+        include: { patient: true },
       });
 
       if (!authRequest) {
@@ -71,8 +68,7 @@ export async function POST(
         );
       }
 
-      // Check if the staff belongs to the HMO that received the request
-      if (staff.hmoId !== authRequest.hmoId) {
+      if (authRequest.patient && authRequest.patient.hmoId !== staff.hmoId) {
         return NextResponse.json(
           { message: "You can only review requests for your HMO" },
           { status: 403 }
@@ -80,12 +76,11 @@ export async function POST(
       }
     }
 
-    // Review the authorization request
     const review = await authService.reviewAuthorizationRequest({
-      requestId,
-      reviewerId: session.user.id,
-      status: status as AuthStatus,
-      notes,
+      authRequestId: requestId,
+      reviewedById: reviewerStaffId,
+      decision: status as AuthStatus,
+      comments: notes,
     });
 
     return NextResponse.json(review, { status: 201 });
@@ -97,6 +92,6 @@ export async function POST(
       message = error.message;
     }
 
-    return NextResponse.json({ message, error }, { status: 500 });
+    return NextResponse.json({ message }, { status: 500 });
   }
 }

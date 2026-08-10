@@ -1,10 +1,10 @@
-import NextAuth from "next-auth";
+import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { UserRole } from "@/lib/enums/UserRole";
+import { authSecret } from "@/lib/auth-config";
 import { prisma } from "@/lib/prisma";
 
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -22,9 +22,13 @@ export const authOptions = {
         });
 
         if (!user) throw new Error("User not found");
-        if (!user.isActive) throw new Error("Account is deactivated. Contact support.");
+        if (!user.isActive)
+          throw new Error("Account is deactivated. Contact support.");
 
-        const isValid = await bcrypt.compare(credentials.password, user.password);
+        const isValid = await bcrypt.compare(
+          credentials.password,
+          user.password,
+        );
         if (!isValid) throw new Error("Invalid password");
 
         // Update last login timestamp
@@ -62,8 +66,10 @@ export const authOptions = {
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id;
-      session.user.role = token.role;
+      if (session.user) {
+        session.user.id = token.id;
+        session.user.role = token.role;
+      }
       return session;
     },
     async redirect({ url, baseUrl }) {
@@ -78,7 +84,7 @@ export const authOptions = {
   pages: {
     signIn: "/auth/login",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
 };
 
 const handler = NextAuth(authOptions);

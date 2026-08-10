@@ -20,7 +20,111 @@ import {
   CheckCircle,
   AlertCircle,
   Sparkles,
+  User,
+  Stethoscope,
+  Building2,
+  Pill,
+  TestTube,
+  Building,
+  ShieldAlert,
+  Zap,
+  Check,
+  Info,
 } from "lucide-react";
+
+interface DemoRole {
+  id: string;
+  label: string;
+  category: string;
+  email: string;
+  roleCode: string;
+  icon: React.ElementType;
+  description: string;
+  badgeColor: string;
+}
+
+const DEMO_ROLES: DemoRole[] = [
+  {
+    id: "patient",
+    label: "Patient",
+    category: "Personal Portal",
+    email: "patient@example.com",
+    roleCode: "PATIENT",
+    icon: User,
+    description: "Track pre-authorizations & claims",
+    badgeColor: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  },
+  {
+    id: "doctor",
+    label: "Doctor",
+    category: "Clinical",
+    email: "doctor@example.com",
+    roleCode: "DOCTOR",
+    icon: Stethoscope,
+    description: "Create pre-auths & medical requests",
+    badgeColor: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+  },
+  {
+    id: "hospital",
+    label: "Hospital Admin",
+    category: "Facility Ops",
+    email: "hospital@example.com",
+    roleCode: "HOSPITAL_ADMIN",
+    icon: Building2,
+    description: "Manage hospital staff & claims",
+    badgeColor: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
+  },
+  {
+    id: "pharmacy",
+    label: "Pharmacist",
+    category: "Dispensing",
+    email: "pharmacy@example.com",
+    roleCode: "PHARMACY",
+    icon: Pill,
+    description: "Dispense & verify drug claims",
+    badgeColor: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+  },
+  {
+    id: "lab",
+    label: "Lab Tech",
+    category: "Diagnostics",
+    email: "lab@example.com",
+    roleCode: "LAB",
+    icon: TestTube,
+    description: "Upload & process lab tests",
+    badgeColor: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  },
+  {
+    id: "hmo",
+    label: "HMO Staff",
+    category: "Payer Ops",
+    email: "hmo@example.com",
+    roleCode: "HMO_STAFF",
+    icon: Building,
+    description: "Review & approve authorization requests",
+    badgeColor: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20",
+  },
+  {
+    id: "hmo-admin",
+    label: "HMO Admin",
+    category: "Payer Management",
+    email: "hmo-admin@example.com",
+    roleCode: "HMO_ADMIN",
+    icon: Building,
+    description: "Configure plans & manage HMO accounts",
+    badgeColor: "bg-teal-500/10 text-teal-500 border-teal-500/20",
+  },
+  {
+    id: "admin",
+    label: "System Admin",
+    category: "Platform",
+    email: "admin@example.com",
+    roleCode: "SYSTEM_ADMIN",
+    icon: ShieldAlert,
+    description: "System logs & user management",
+    badgeColor: "bg-rose-500/10 text-rose-500 border-rose-500/20",
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,8 +139,10 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [isCapsLockOn, setIsCapsLockOn] = useState(false);
+  const [selectedDemoRole, setSelectedDemoRole] = useState<string | null>(null);
 
-  // Role-to-dashboard path mapping (must match middleware and lib/auth)
+  // Role-to-dashboard path mapping
   const getRedirectPathForRole = (role: string): string => {
     switch (role) {
       case "PATIENT":
@@ -64,81 +170,126 @@ export default function LoginPage() {
     signOut({ redirect: false }).catch(() => {});
   }, []);
 
-  // Set default credentials based on role query parameter (dev/demo quick login)
+  // Restore saved email from localStorage if rememberMe was set
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("clearmed_remember_email");
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Set default credentials based on role query parameter or preset
   useEffect(() => {
     if (roleParam) {
-      switch (roleParam) {
-        case "patient":
-          setEmail("patient@example.com");
-          setPassword("password123");
-          break;
-        case "doctor":
-          setEmail("doctor@example.com");
-          setPassword("password123");
-          break;
-        case "hospital":
-          setEmail("hospital@example.com");
-          setPassword("password123");
-          break;
-        case "hmo":
-          setEmail("hmo@example.com");
-          setPassword("password123");
-          break;
-        case "admin":
-          setEmail("admin@example.com");
-          setPassword("password123");
-          break;
+      const demo = DEMO_ROLES.find(
+        (r) => r.id === roleParam || r.roleCode.toLowerCase() === roleParam.toLowerCase()
+      );
+      if (demo) {
+        setEmail(demo.email);
+        setPassword("password123");
+        setSelectedDemoRole(demo.id);
       }
     }
   }, [roleParam]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle demo role pill click
+  const selectDemoRole = (role: DemoRole, autoSubmit = false) => {
+    setEmail(role.email);
+    setPassword("password123");
+    setSelectedDemoRole(role.id);
+    setError("");
+    toast.success(`Loaded credentials for ${role.label}`, { icon: "🔑" });
+
+    if (autoSubmit) {
+      performLogin(role.email, "password123");
+    }
+  };
+
+  // Detect Caps Lock state
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.getModifierState) {
+      setIsCapsLockOn(e.getModifierState("CapsLock"));
+    }
+  };
+
+  const performLogin = async (loginEmail: string, loginPass: string) => {
     setError("");
     setIsLoading(true);
 
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-
-    if (result?.error) {
-      toast.error(result.error);
-      setError(result.error);
-      setIsLoading(false);
-      return;
+    if (rememberMe && loginEmail) {
+      localStorage.setItem("clearmed_remember_email", loginEmail);
+    } else {
+      localStorage.removeItem("clearmed_remember_email");
     }
 
-    // Fetch fresh session (no cache) so we get the newly signed-in user's role
-    const sessionRes = await fetch(
-      `/api/auth/session?t=${Date.now()}`,
-      { cache: "no-store", credentials: "include" }
-    );
-    const session = await sessionRes.json();
-    const userRole = session?.user?.role as string | undefined;
+    try {
+      const result = await signIn("credentials", {
+        email: loginEmail,
+        password: loginPass,
+        redirect: false,
+      });
 
-    if (!userRole) {
-      toast.error("Session error. Please try again.");
+      if (result?.error) {
+        toast.error(result.error);
+        setError(result.error);
+        setIsLoading(false);
+        return;
+      }
+
+      // Fetch fresh session (no cache)
+      const sessionRes = await fetch(`/api/auth/session?t=${Date.now()}`, {
+        cache: "no-store",
+        credentials: "include",
+      });
+      const session = await sessionRes.json();
+      const userRole = session?.user?.role as string | undefined;
+
+      if (!userRole) {
+        toast.error("Session initialization failed. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
+      toast.success(`Welcome back, ${session.user.name || "User"}!`);
+
+      // Use callbackUrl only if it's a relative path and not auth page
+      const isSafeCallback =
+        callbackUrl &&
+        callbackUrl.startsWith("/") &&
+        !callbackUrl.startsWith("/auth/");
+      const redirectPath = isSafeCallback
+        ? callbackUrl
+        : getRedirectPathForRole(userRole);
+
+      router.push(redirectPath);
+    } catch {
+      setError("An unexpected error occurred. Please try again.");
+      toast.error("An unexpected error occurred during sign in.");
       setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !email.includes("@")) {
+      setError("Please enter a valid email address.");
       return;
     }
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
+    performLogin(email, password);
+  };
 
-    // Use callbackUrl only if it's a relative path (same-origin) and not auth page
-    const isSafeCallback =
-      callbackUrl &&
-      callbackUrl.startsWith("/") &&
-      !callbackUrl.startsWith("/auth/");
-    const redirectPath = isSafeCallback
-      ? callbackUrl
-      : getRedirectPathForRole(userRole);
-
-    router.push(redirectPath);
+  const handleSSOClick = (providerName: string) => {
+    toast.error(`${providerName} Single Sign-On is managed by your organization's IT Admin.`);
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden overflow-y-auto relative">
-      {/* Background effects - pointer-events-none so they don't block clicks/scroll */}
+      {/* Background effects */}
       <div className="fixed inset-0 grid-pattern opacity-20 pointer-events-none" />
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -167,7 +318,7 @@ export default function LoginPage() {
               <span className="text-xl font-bold">ClearMed</span>
             </Link>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground hidden sm:inline">
                 New to ClearMed?
               </span>
               <Link href="/auth/register">
@@ -181,58 +332,144 @@ export default function LoginPage() {
       </header>
 
       <main className="relative z-10 flex items-center justify-center min-h-[calc(100vh-80px)] py-12 px-4">
-        <div className="w-full max-w-lg">
+        <div className="w-full max-w-xl">
           {/* Header Section */}
-          <div className="text-center mb-12">
+          <div className="text-center mb-8">
             {registered && (
               <Badge
                 variant="secondary"
-                className="mb-6 px-4 py-2 text-sm bg-primary/10 text-primary border-primary/20"
+                className="mb-4 px-4 py-2 text-sm bg-emerald-500/10 text-emerald-500 border-emerald-500/20 inline-flex items-center"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
-                Account created successfully!
+                Account created successfully! Please sign in.
               </Badge>
             )}
 
-            <div className="flex items-center justify-center mb-6">
-              <Badge variant="secondary" className="px-4 py-2 text-sm">
-                <Sparkles className="w-4 h-4 mr-2" />
-                Welcome back
+            <div className="flex items-center justify-center mb-4">
+              <Badge variant="secondary" className="px-4 py-1.5 text-sm">
+                <Sparkles className="w-4 h-4 mr-2 text-primary" />
+                Secure Portal Access
               </Badge>
             </div>
 
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-balance">
+            <h1 className="text-4xl md:text-5xl font-bold mb-3 text-balance">
               Sign in to <span className="text-gradient">ClearMed</span>
             </h1>
 
-            <p className="text-lg text-muted-foreground max-w-md mx-auto text-pretty">
-              Access your healthcare authorization dashboard and streamline your
-              workflow
+            <p className="text-base text-muted-foreground max-w-md mx-auto text-pretty">
+              Smart prior authorization & health management workspace
             </p>
           </div>
 
+          {/* Quick Demo Role Switcher */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-primary" />
+                Quick Demo Sign-In
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Select role to pre-fill
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {DEMO_ROLES.slice(0, 8).map((role) => {
+                const IconComponent = role.icon;
+                const isSelected = selectedDemoRole === role.id;
+
+                return (
+                  <button
+                    key={role.id}
+                    type="button"
+                    onClick={() => selectDemoRole(role, false)}
+                    className={`relative p-2.5 rounded-xl border text-left transition-all duration-200 group flex flex-col justify-between ${
+                      isSelected
+                        ? "bg-primary/10 border-primary shadow-sm ring-1 ring-primary"
+                        : "bg-card/60 hover:bg-card border-border/80 hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground group-hover:text-foreground"
+                        }`}
+                      >
+                        <IconComponent className="w-4 h-4" />
+                      </div>
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-foreground truncate">
+                        {role.label}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {role.category}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedDemoRole && (
+              <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between animate-fadeIn">
+                <div className="flex items-center space-x-2 text-xs">
+                  <Info className="w-4 h-4 text-primary flex-shrink-0" />
+                  <span className="text-muted-foreground">
+                    Selected:{" "}
+                    <strong className="text-foreground font-medium">
+                      {
+                        DEMO_ROLES.find((r) => r.id === selectedDemoRole)
+                          ?.label
+                      }
+                    </strong>{" "}
+                    ({email})
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => {
+                    const role = DEMO_ROLES.find((r) => r.id === selectedDemoRole);
+                    if (role) selectDemoRole(role, true);
+                  }}
+                  disabled={isLoading}
+                  className="h-7 px-3 text-xs bg-primary hover:bg-primary/90"
+                >
+                  <Zap className="w-3 h-3 mr-1" />
+                  Quick Login
+                </Button>
+              </div>
+            )}
+          </div>
+
           {/* Login Form */}
-          <Card className="glass-card p-8 md:p-10">
+          <Card className="glass-card p-6 md:p-8">
             {error && (
               <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex items-start space-x-3">
                 <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="font-medium text-destructive mb-1">
+                  <h3 className="font-medium text-destructive mb-1 text-sm">
                     Authentication Error
                   </h3>
-                  <p className="text-sm text-destructive/80">{error}</p>
+                  <p className="text-xs text-destructive/90">{error}</p>
                 </div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email Field */}
               <div className="space-y-2">
                 <label
                   htmlFor="email"
-                  className="text-sm font-medium text-foreground"
+                  className="text-sm font-medium text-foreground flex items-center justify-between"
                 >
-                  Email Address
+                  <span>Email Address</span>
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -243,21 +480,31 @@ export default function LoginPage() {
                     autoComplete="email"
                     required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground"
-                    placeholder="Enter your email address"
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setSelectedDemoRole(null);
+                    }}
+                    className="w-full pl-10 pr-4 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground text-sm"
+                    placeholder="name@organization.com"
                   />
                 </div>
               </div>
 
               {/* Password Field */}
               <div className="space-y-2">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Password
-                </label>
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="password"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Password
+                  </label>
+                  {isCapsLockOn && (
+                    <span className="text-xs text-amber-500 font-medium flex items-center gap-1 animate-pulse">
+                      <AlertCircle className="w-3 h-3" /> Caps Lock is ON
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input
@@ -268,13 +515,16 @@ export default function LoginPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-12 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground"
-                    placeholder="Enter your password"
+                    onKeyDown={handleKeyDown}
+                    onKeyUp={handleKeyDown}
+                    className="w-full pl-10 pr-12 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground text-sm"
+                    placeholder="Enter password"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -286,7 +536,7 @@ export default function LoginPage() {
               </div>
 
               {/* Remember Me & Forgot Password */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between pt-1">
                 <div className="flex items-center space-x-2">
                   <input
                     id="remember-me"
@@ -294,19 +544,19 @@ export default function LoginPage() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-2 bg-input"
+                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-2 bg-input accent-primary cursor-pointer"
                   />
                   <label
                     htmlFor="remember-me"
-                    className="text-sm text-foreground"
+                    className="text-xs text-muted-foreground cursor-pointer select-none"
                   >
-                    Remember me
+                    Remember my email
                   </label>
                 </div>
 
                 <Link
                   href="/auth/forgot-password"
-                  className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
                 >
                   Forgot password?
                 </Link>
@@ -316,7 +566,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 text-lg font-semibold bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                className="w-full py-3 text-base font-semibold bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg"
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
@@ -324,101 +574,67 @@ export default function LoginPage() {
                     <span>Signing you in...</span>
                   </div>
                 ) : (
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center justify-center space-x-2">
                     <span>Sign In</span>
                     <ArrowRight className="w-4 h-4" />
                   </div>
                 )}
               </Button>
 
-              {/* Quick Login Options */}
-              <div className="mt-6">
-                <p className="text-sm text-center mb-3 text-muted-foreground">
-                  Quick login options:
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Link href="/auth/login?role=patient">
-                    <Button variant="outline" size="sm" className="w-full">
-                      Patient
-                    </Button>
-                  </Link>
-                  <Link href="/auth/login?role=doctor">
-                    <Button variant="outline" size="sm" className="w-full">
-                      Doctor
-                    </Button>
-                  </Link>
-                  <Link href="/auth/login?role=hospital">
-                    <Button variant="outline" size="sm" className="w-full">
-                      Hospital
-                    </Button>
-                  </Link>
-                  <Link href="/auth/login?role=hmo">
-                    <Button variant="outline" size="sm" className="w-full">
-                      HMO
-                    </Button>
-                  </Link>
-                  <Link href="/auth/login?role=admin">
-                    <Button variant="outline" size="sm" className="w-full">
-                      Admin
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-
               {/* Divider */}
-              <div className="relative">
+              <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border/50" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    Or continue with
+                  <span className="bg-card px-3 text-muted-foreground font-medium">
+                    Enterprise SSO
                   </span>
                 </div>
               </div>
 
-              {/* Social Login Placeholder */}
+              {/* Social / Enterprise Login Buttons */}
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="outline"
                   type="button"
-                  disabled
-                  className="py-3 bg-transparent"
+                  onClick={() => handleSSOClick("Google Workspace")}
+                  className="py-2.5 bg-card/50 hover:bg-card border-border text-xs"
                 >
                   <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                     <path
-                      fill="currentColor"
+                      fill="#4285F4"
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     />
                     <path
-                      fill="currentColor"
+                      fill="#34A853"
                       d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
                     />
                     <path
-                      fill="currentColor"
+                      fill="#FBBC05"
                       d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
                     />
                     <path
-                      fill="currentColor"
+                      fill="#EA4335"
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  Google
+                  Google SSO
                 </Button>
                 <Button
                   variant="outline"
                   type="button"
-                  disabled
-                  className="py-3 bg-transparent"
+                  onClick={() => handleSSOClick("Microsoft Entra ID")}
+                  className="py-2.5 bg-card/50 hover:bg-card border-border text-xs"
                 >
                   <svg
                     className="w-4 h-4 mr-2"
-                    fill="currentColor"
+                    fill="#00A4EF"
                     viewBox="0 0 24 24"
                   >
-                    <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.024-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.402.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.357-.629-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24.009 12.017 24.009c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641.001 12.017.001z" />
+                    <path d="M11.4 24H0V12.6h11.4V24zM24 24H12.6V12.6H24V24zM11.4 11.4H0V0h11.4v11.4zM24 11.4H12.6V0H24v11.4z" />
                   </svg>
-                  Microsoft
+                  Microsoft SSO
                 </Button>
               </div>
             </form>
@@ -427,12 +643,12 @@ export default function LoginPage() {
           {/* Footer */}
           <div className="text-center mt-8 space-y-4">
             <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
+              Don&apos;t have an account yet?{" "}
               <Link
                 href="/auth/register"
-                className="text-primary hover:text-primary/80 font-medium"
+                className="text-primary hover:text-primary/80 font-medium underline-offset-4 hover:underline"
               >
-                Create one now
+                Register your organization
               </Link>
             </p>
 

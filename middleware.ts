@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { authSecret } from "@/lib/auth-config";
 
 export async function middleware(request: NextRequest) {
-  const token = await getToken({ req: request });
+  const token = await getToken({ req: request, secret: authSecret });
   const { pathname } = request.nextUrl;
 
   // Public routes accessible without authentication
@@ -11,13 +12,22 @@ export async function middleware(request: NextRequest) {
     "/auth/register",
     "/auth/forgot-password",
     "/sidebar-demo",
+    "/terms",
+    "/privacy",
+    "/contact",
   ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
 
+  // Protected route prefixes requiring login
+  const protectedPrefixes = ["/personal", "/hospital", "/hmo", "/admin"];
+  const isProtectedRoute = protectedPrefixes.some((prefix) =>
+    pathname.startsWith(prefix)
+  );
+
   // If not authenticated and trying to access protected route
-  if (!token && !isPublicRoute && pathname !== "/") {
+  if (!token && isProtectedRoute) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 

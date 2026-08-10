@@ -7,6 +7,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarToggle,
+  SidebarMobileToggle,
   SidebarNav,
   SidebarNavItem,
   SidebarGroup,
@@ -211,7 +212,10 @@ export function PersonalSidebarWrapper({
     <SidebarProvider>
       <div className="flex h-screen">
         <PersonalSidebar currentPath={currentPath} />
-        <main className="flex-1 overflow-hidden">{children}</main>
+        <main className="relative flex-1 overflow-hidden">
+          <SidebarMobileToggle />
+          {children}
+        </main>
       </div>
     </SidebarProvider>
   );

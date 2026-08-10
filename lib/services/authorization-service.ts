@@ -1,22 +1,24 @@
-import { AuthStatus } from "@/lib/generated/prisma";
-import UserRole from "@/lib/generated/prisma/UserRole";
+import { AuthStatus, NotificationType } from "@/lib/enums/AuthStatus";
+import { UserRole } from "@/lib/enums/UserRole";
 import { v4 as uuidv4 } from "uuid";
 import { prisma } from "@/lib/prisma";
 
 interface CreateAuthorizationRequestParams {
-  patientId: string;
+  patientId?: string;
+  dependentId?: string;
   hospitalId: string;
-  requestedBy: string; // userId of the doctor or hospital staff
-  serviceIds: string[];
-  diagnosis: string;
-  notes?: string;
+  requestedById: string; // HospitalStaff.id
+  serviceId: string;
+  diagnosisCode?: string;
+  diagnosisNotes?: string;
+  quantity?: number;
 }
 
 interface ReviewAuthorizationRequestParams {
-  requestId: string;
-  reviewerId: string; // userId of the HMO staff
-  status: AuthStatus;
-  notes?: string;
+  authRequestId: string;
+  reviewedById: string; // HMOStaff.id
+  decision: AuthStatus;
+  comments?: string;
 }
 
 export class AuthorizationService {
@@ -24,12 +26,35 @@ export class AuthorizationService {
    * Creates a new authorization request
    */
   async createAuthorizationRequest(params: CreateAuthorizationRequestParams) {
-    const { patientId, hospitalId, requestedBy, serviceIds, diagnosis, notes } = params;
+    const {
+      patientId,
+      dependentId,
+      hospitalId,
+      requestedById,
+      serviceId,
+      diagnosisCode,
+      diagnosisNotes,
+      quantity = 1,
+    } = params;
 
-    // Get patient details to determine HMO and coverage plan
+    let targetPatientId = patientId;
+    if (!targetPatientId && dependentId) {
+      const dependent = await prisma.dependent.findUnique({
+        where: { id: dependentId },
+      });
+      if (dependent) {
+        targetPatientId = dependent.patientId;
+      }
+    }
+
+    if (!targetPatientId) {
+      throw new Error("Patient or dependent ID is required");
+    }
+
     const patient = await prisma.patient.findUnique({
-      where: { id: patientId },
+      where: { id: targetPatientId },
       include: {
+        user: true,
         coveragePlan: true,
       },
     });
@@ -38,29 +63,25 @@ export class AuthorizationService {
       throw new Error("Patient not found");
     }
 
-    // Generate a unique authorization code
     const authCode = this.generateAuthorizationCode();
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 30);
 
-    // Create the authorization request
     const authRequest = await prisma.authorizationRequest.create({
       data: {
-        patientId,
+        patientId: targetPatientId,
+        dependentId,
         hospitalId,
-        hmoId: patient.hmoId,
-        requestedBy,
-        diagnosis,
-        notes,
-        authorizationCode: authCode,
-        coveragePlanId: patient.coveragePlanId,
-        // Create service requests for each service
-        services: {
-          create: serviceIds.map((serviceId) => ({
-            serviceId,
-          })),
-        },
+        requestedById,
+        serviceId,
+        diagnosisCode,
+        diagnosisNotes,
+        quantity,
+        authCode,
+        status: "PENDING",
+        expiryDate,
       },
       include: {
-        services: true,
         patient: {
           include: {
             user: true,
@@ -68,46 +89,45 @@ export class AuthorizationService {
           },
         },
         hospital: true,
+        service: true,
+        requestedBy: {
+          include: {
+            user: true,
+          },
+        },
       },
     });
 
-    // Process the request through the auto-approval engine
+    // Auto-approval engine processing
     await this.processAuthorizationRequest(authRequest.id);
 
-    // Create audit log
+    // Audit log
     await prisma.auditLog.create({
       data: {
-        userId: requestedBy,
-        action: "CREATE",
+        userId: authRequest.requestedBy.userId,
+        action: "AUTH_REQUEST",
         entityType: "AuthorizationRequest",
         entityId: authRequest.id,
-        details: `Authorization request created for patient ${patientId} with code ${authCode}`,
+        details: `Authorization request created with code ${authCode}`,
       },
     });
 
-    // Create notification for patient
+    // Patient notification
     await prisma.notification.create({
       data: {
         userId: patient.userId,
-        type: "AUTHORIZATION_REQUEST",
+        type: "AUTH_REQUEST",
         title: "New Authorization Request",
-        message: `A new authorization request has been submitted for your approval`,
+        message: `An authorization request has been submitted for service processing.`,
         relatedEntityId: authRequest.id,
         relatedEntityType: "AuthorizationRequest",
       },
     });
 
-    // Create notification for HMO
-    // Find HMO staff to notify
+    // HMO Staff notification
     const hmoStaff = await prisma.hMOStaff.findFirst({
       where: {
         hmoId: patient.hmoId,
-        user: {
-          role: "HMO_STAFF",
-        },
-      },
-      include: {
-        user: true,
       },
     });
 
@@ -115,9 +135,9 @@ export class AuthorizationService {
       await prisma.notification.create({
         data: {
           userId: hmoStaff.userId,
-          type: "AUTHORIZATION_REQUEST",
+          type: "AUTH_REQUEST",
           title: "New Authorization Request",
-          message: `A new authorization request requires your review`,
+          message: `A new authorization request requires review.`,
           relatedEntityId: authRequest.id,
           relatedEntityType: "AuthorizationRequest",
         },
@@ -128,17 +148,13 @@ export class AuthorizationService {
   }
 
   /**
-   * Process an authorization request through the auto-approval engine
+   * Process an authorization request through auto-approval check
    */
   async processAuthorizationRequest(requestId: string) {
     const request = await prisma.authorizationRequest.findUnique({
       where: { id: requestId },
       include: {
-        services: {
-          include: {
-            service: true,
-          },
-        },
+        service: true,
         patient: {
           include: {
             coveragePlan: true,
@@ -152,138 +168,68 @@ export class AuthorizationService {
       throw new Error("Authorization request not found");
     }
 
-    // Check if the request can be auto-approved
     const canAutoApprove = await this.canAutoApprove(request);
 
     if (canAutoApprove) {
-      // Auto-approve the request
       await prisma.authorizationRequest.update({
         where: { id: requestId },
         data: {
-          status: "APPROVED",
-          reviewedAt: new Date(),
-          // Create a system review
-          reviews: {
-            create: {
-              reviewerId: "system", // Special ID for system reviews
-              status: "APPROVED",
-              notes: "Auto-approved by system based on coverage rules",
-            },
+          status: "AUTO_APPROVED",
+        },
+      });
+
+      if (request.patient) {
+        await prisma.notification.create({
+          data: {
+            userId: request.patient.userId,
+            type: "AUTH_APPROVAL",
+            title: "Authorization Auto-Approved",
+            message: `Your authorization request for ${request.service.name} was automatically approved.`,
+            relatedEntityId: requestId,
+            relatedEntityType: "AuthorizationRequest",
           },
-        },
-      });
-
-      // Create notification for patient
-      await prisma.notification.create({
-        data: {
-          userId: request.patient.userId,
-          type: "AUTHORIZATION_APPROVED",
-          title: "Authorization Request Approved",
-          message: `Your authorization request has been automatically approved`,
-          relatedEntityId: requestId,
-          relatedEntityType: "AuthorizationRequest",
-        },
-      });
-
-      // Create audit log
-      await prisma.auditLog.create({
-        data: {
-          userId: "system",
-          action: "UPDATE",
-          entityType: "AuthorizationRequest",
-          entityId: requestId,
-          details: `Authorization request ${requestId} auto-approved by system`,
-        },
-      });
-    } else {
-      // Mark for manual review
-      await prisma.authorizationRequest.update({
-        where: { id: requestId },
-        data: {
-          status: "PENDING",
-        },
-      });
+        });
+      }
     }
 
     return request;
   }
 
   /**
-   * Determine if a request can be auto-approved based on rules
+   * Check if request meets auto-approval criteria
    */
   async canAutoApprove(request: any) {
-    // Get coverage rules for the patient's plan
-    const coverageRules = await prisma.coverageRule.findMany({
+    if (!request.patient?.coveragePlanId) return false;
+
+    const coverageRule = await prisma.coverageRule.findFirst({
       where: {
         coveragePlanId: request.patient.coveragePlanId,
+        serviceId: request.serviceId,
       },
     });
 
-    // Get contract between hospital and HMO
+    if (!coverageRule) return false;
+    if (coverageRule.requiresPreAuth) return false;
+
     const contract = await prisma.hMOHospitalContract.findFirst({
       where: {
         hmoId: request.patient.hmoId,
         hospitalId: request.hospitalId,
         isActive: true,
       },
-      include: {
-        services: {
-          include: {
-            service: true,
-          },
-        },
-      },
     });
 
-    // If no active contract exists, cannot auto-approve
-    if (!contract) {
-      return false;
-    }
-
-    // Check if all services are covered by the contract and within auto-approval limits
-    for (const serviceRequest of request.services) {
-      const service = serviceRequest.service;
-
-      // Find if service is in contract
-      const contractService = contract.services.find(
-        (cs) => cs.serviceId === service.id
-      );
-
-      if (!contractService) {
-        return false; // Service not in contract
-      }
-
-      // Find coverage rule for this service
-      const coverageRule = coverageRules.find(
-        (rule) => rule.serviceId === service.id
-      );
-
-      // If no specific rule exists or service cost exceeds auto-approval threshold
-      if (!coverageRule || service.cost > coverageRule.autoApprovalThreshold) {
-        return false;
-      }
-
-      // Check if service requires pre-authorization
-      if (coverageRule.requiresPreAuth) {
-        // Additional checks could be implemented here
-        // For now, if it requires pre-auth, we'll say it needs manual review
-        return false;
-      }
-    }
-
-    // If all checks pass, the request can be auto-approved
-    return true;
+    return !!contract;
   }
 
   /**
-   * Review an authorization request (for HMO staff)
+   * Review an authorization request (HMO Staff action)
    */
   async reviewAuthorizationRequest(params: ReviewAuthorizationRequestParams) {
-    const { requestId, reviewerId, status, notes } = params;
+    const { authRequestId, reviewedById, decision, comments } = params;
 
-    // Get the request
     const request = await prisma.authorizationRequest.findUnique({
-      where: { id: requestId },
+      where: { id: authRequestId },
       include: {
         patient: true,
       },
@@ -293,47 +239,35 @@ export class AuthorizationService {
       throw new Error("Authorization request not found");
     }
 
-    // Create the review
     const review = await prisma.authorizationReview.create({
       data: {
-        requestId,
-        reviewerId,
-        status,
-        notes,
+        authRequestId,
+        reviewedById,
+        decision,
+        comments,
       },
     });
 
-    // Update the request status
     await prisma.authorizationRequest.update({
-      where: { id: requestId },
+      where: { id: authRequestId },
       data: {
-        status,
-        reviewedAt: new Date(),
+        status: decision,
       },
     });
 
-    // Create notification for patient
-    await prisma.notification.create({
-      data: {
-        userId: request.patient.userId,
-        type: status === "APPROVED" ? "AUTHORIZATION_APPROVED" : "AUTHORIZATION_REJECTED",
-        title: `Authorization Request ${status === "APPROVED" ? "Approved" : "Rejected"}`,
-        message: `Your authorization request has been ${status.toLowerCase()} by the HMO`,
-        relatedEntityId: requestId,
-        relatedEntityType: "AuthorizationRequest",
-      },
-    });
-
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: reviewerId,
-        action: "UPDATE",
-        entityType: "AuthorizationRequest",
-        entityId: requestId,
-        details: `Authorization request ${requestId} ${status.toLowerCase()} by HMO staff`,
-      },
-    });
+    if (request.patient) {
+      const isApproved = decision === "APPROVED" || decision === "AUTO_APPROVED";
+      await prisma.notification.create({
+        data: {
+          userId: request.patient.userId,
+          type: isApproved ? "AUTH_APPROVAL" : "AUTH_REJECTION",
+          title: `Authorization Request ${isApproved ? "Approved" : "Rejected"}`,
+          message: `Your authorization request has been ${decision.toLowerCase()}`,
+          relatedEntityId: authRequestId,
+          relatedEntityType: "AuthorizationRequest",
+        },
+      });
+    }
 
     return review;
   }
@@ -342,42 +276,32 @@ export class AuthorizationService {
    * Validate an authorization code for service delivery
    */
   async validateAuthorizationCode(authCode: string, serviceId: string) {
-    // Find the authorization request by code
     const authRequest = await prisma.authorizationRequest.findFirst({
       where: {
-        authorizationCode: authCode,
-        status: "APPROVED",
+        authCode,
+        status: { in: ["APPROVED", "AUTO_APPROVED"] },
       },
       include: {
-        services: true,
+        service: true,
+        patient: { include: { user: true } },
       },
     });
 
     if (!authRequest) {
       return {
         valid: false,
-        message: "Invalid or expired authorization code",
+        message: "Invalid or unapproved authorization code",
       };
     }
 
-    // Check if the service is included in the authorization
-    const serviceIncluded = authRequest.services.some(
-      (s) => s.serviceId === serviceId
-    );
-
-    if (!serviceIncluded) {
+    if (authRequest.serviceId !== serviceId) {
       return {
         valid: false,
-        message: "Service not included in this authorization",
+        message: "Service does not match authorized service code",
       };
     }
 
-    // Check if the authorization has expired (e.g., 30 days validity)
-    const validityDays = 30;
-    const expiryDate = new Date(authRequest.createdAt);
-    expiryDate.setDate(expiryDate.getDate() + validityDays);
-
-    if (new Date() > expiryDate) {
+    if (authRequest.expiryDate && new Date() > authRequest.expiryDate) {
       return {
         valid: false,
         message: "Authorization code has expired",
@@ -392,58 +316,51 @@ export class AuthorizationService {
   }
 
   /**
-   * Record service delivery
+   * Record service delivery by hospital staff
    */
-  async recordServiceDelivery(authCode: string, serviceId: string, staffId: string) {
-    // Validate the authorization code
+  async recordServiceDelivery(
+    authCode: string,
+    serviceId: string,
+    deliveredById: string,
+    actualQuantity: number = 1,
+    actualCost?: number
+  ) {
     const validation = await this.validateAuthorizationCode(authCode, serviceId);
 
-    if (!validation.valid) {
+    if (!validation.valid || !validation.authRequest) {
       throw new Error(validation.message);
     }
 
     const authRequest = validation.authRequest;
+    const cost = actualCost ?? authRequest.service.standardPrice * actualQuantity;
 
-    // Record the service delivery
     const serviceDelivery = await prisma.serviceDelivery.create({
       data: {
-        authorizationRequestId: authRequest.id,
+        authRequestId: authRequest.id,
+        deliveredById,
         serviceId,
-        deliveredBy: staffId,
+        actualQuantity,
+        actualCost: cost,
       },
     });
 
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: staffId,
-        action: "CREATE",
-        entityType: "ServiceDelivery",
-        entityId: serviceDelivery.id,
-        details: `Service ${serviceId} delivered for authorization ${authCode}`,
-      },
-    });
-
-    // Create notification for patient
-    await prisma.notification.create({
-      data: {
-        userId: authRequest.patientId,
-        type: "SERVICE_DELIVERED",
-        title: "Service Delivered",
-        message: `Your authorized service has been delivered`,
-        relatedEntityId: serviceDelivery.id,
-        relatedEntityType: "ServiceDelivery",
-      },
-    });
+    if (authRequest.patient) {
+      await prisma.notification.create({
+        data: {
+          userId: authRequest.patient.userId,
+          type: "SERVICE_DELIVERY",
+          title: "Healthcare Service Delivered",
+          message: `Service ${authRequest.service.name} has been marked as delivered.`,
+          relatedEntityId: serviceDelivery.id,
+          relatedEntityType: "ServiceDelivery",
+        },
+      });
+    }
 
     return serviceDelivery;
   }
 
-  /**
-   * Generate a unique authorization code
-   */
   private generateAuthorizationCode(): string {
-    // Generate a random 8-character alphanumeric code
     const uuid = uuidv4();
     return `AUTH-${uuid.substring(0, 8).toUpperCase()}`;
   }
