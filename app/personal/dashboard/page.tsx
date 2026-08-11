@@ -31,10 +31,35 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+interface PatientData {
+  id: string;
+  membershipNumber: string;
+  coverageStartDate?: string | null;
+  coverageEndDate?: string | null;
+  coveragePercentage?: number | null;
+  annualLimit?: number | null;
+  usedAmount: number;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  hmo: {
+    id: string;
+    name: string;
+  };
+  coveragePlan: {
+    id: string;
+    name: string;
+    description?: string | null;
+  };
+  recentAuthorizations?: Array<Record<string, unknown>>;
+}
+
 export default function PersonalDashboard() {
   const router = useRouter();
   const { data: session } = useSession();
-  const [patientData, setPatientData] = useState(null);
+  const [patientData, setPatientData] = useState<PatientData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -671,7 +696,7 @@ export default function PersonalDashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => router.push("/personal/request/new")}
+                  onClick={() => router.push("/personal/authorizations/new")}
                   className="h-8"
                 >
                   <FileText className="h-4 w-4 mr-2" />

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * My Requests: lists all authorization requests (hospital) with tabs and link to make a new request.
+ * My Requests: lists all authorization requests (hospital) with tabs synced with the database.
  * Uses same design system as dashboard and authorizations.
  */
 
@@ -14,6 +14,7 @@ import AuthorizationCard from "@/components/ui/authorization-card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Loader2, AlertCircle, PlusCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AuthStatus } from "@/lib/enums/AuthStatus";
 
 interface AuthRequest {
   id: string;
@@ -36,14 +37,16 @@ export default function MyRequestsPage() {
 
   useEffect(() => {
     const fetchAuthorizations = async () => {
+      setIsLoading(true);
+      setError("");
       try {
-        const response = await fetch("/api/authorizations");
+        const response = await fetch(`/api/authorizations?status=${activeTab}`);
         if (!response.ok) {
-          throw new Error("Failed to fetch requests");
+          throw new Error("Failed to fetch requests from database");
         }
         const data = await response.json();
         setAuthorizations(Array.isArray(data) ? data : []);
-      } catch (err) {
+      } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : "Failed to load requests"
         );
@@ -52,13 +55,7 @@ export default function MyRequestsPage() {
       }
     };
     fetchAuthorizations();
-  }, []);
-
-  const filtered = () => {
-    if (activeTab === "all") return authorizations;
-    const status = activeTab.toUpperCase();
-    return authorizations.filter((auth) => auth.status === status);
-  };
+  }, [activeTab]);
 
   const normalizeServices = (
     services: AuthRequest["services"]
@@ -87,7 +84,7 @@ export default function MyRequestsPage() {
                 </p>
               </div>
               <Button
-                onClick={() => router.push("/personal/request/new")}
+                onClick={() => router.push("/personal/authorizations/new")}
                 className="h-9"
               >
                 <PlusCircle className="h-4 w-4 mr-2" />
@@ -118,7 +115,7 @@ export default function MyRequestsPage() {
                   <AlertTitle>Error</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
-              ) : filtered().length === 0 ? (
+              ) : authorizations.length === 0 ? (
                 <Card className="data-visualization">
                   <CardContent className="p-6 text-center">
                     <div className="flex flex-col items-center justify-center py-8">
@@ -131,7 +128,7 @@ export default function MyRequestsPage() {
                           ? "You haven't created any requests yet."
                           : `You don't have any ${activeTab.toLowerCase()} requests.`}
                       </p>
-                      <Button onClick={() => router.push("/personal/request/new")}>
+                      <Button onClick={() => router.push("/personal/authorizations/new")}>
                         <PlusCircle className="h-4 w-4 mr-2" />
                         Make a Request
                       </Button>
@@ -140,7 +137,7 @@ export default function MyRequestsPage() {
                 </Card>
               ) : (
                 <div className="space-y-4">
-                  {filtered().map((auth) => (
+                  {authorizations.map((auth) => (
                     <AuthorizationCard
                       key={auth.id}
                       id={auth.id}
@@ -149,7 +146,7 @@ export default function MyRequestsPage() {
                       hospitalName={auth.hospital?.name ?? "Unknown Hospital"}
                       diagnosis={auth.diagnosis ?? ""}
                       services={normalizeServices(auth.services)}
-                      status={auth.status as "PENDING" | "APPROVED" | "REJECTED" | "COMPLETED"}
+                      status={auth.status as AuthStatus}
                       createdAt={new Date(auth.createdAt)}
                       reviewedAt={
                         auth.reviewedAt

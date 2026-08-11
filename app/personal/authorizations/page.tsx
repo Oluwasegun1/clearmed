@@ -42,14 +42,16 @@ export default function AuthorizationsPage() {
 
   useEffect(() => {
     const fetchAuthorizations = async () => {
+      setIsLoading(true);
+      setError("");
       try {
-        const response = await fetch("/api/authorizations");
+        const response = await fetch(`/api/authorizations?status=${activeTab}`);
         if (!response.ok) {
           throw new Error("Failed to fetch authorizations");
         }
 
         const data = await response.json();
-        setAuthorizations(data);
+        setAuthorizations(Array.isArray(data) ? data : []);
       } catch (err: unknown) {
         console.error("Error fetching authorizations:", err);
         const message = err instanceof Error ? err.message : "Failed to load authorizations";
@@ -60,14 +62,7 @@ export default function AuthorizationsPage() {
     };
 
     fetchAuthorizations();
-  }, []);
-
-  const filteredAuthorizations = () => {
-    if (activeTab === "all") return authorizations;
-    return authorizations.filter(
-      (auth) => auth.status === activeTab.toUpperCase()
-    );
-  };
+  }, [activeTab]);
 
   return (
     <PersonalSidebarWrapper currentPath="/personal/authorizations">
@@ -80,7 +75,7 @@ export default function AuthorizationsPage() {
           </Button>
         </div>
 
-        <Tabs defaultValue="all" onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-4">
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="pending">Pending</TabsTrigger>
@@ -100,7 +95,7 @@ export default function AuthorizationsPage() {
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
-            ) : filteredAuthorizations().length === 0 ? (
+            ) : authorizations.length === 0 ? (
               <Card>
                 <CardContent className="p-6 text-center">
                   <div className="flex flex-col items-center justify-center py-8">
@@ -121,7 +116,7 @@ export default function AuthorizationsPage() {
               </Card>
             ) : (
               <div className="space-y-4">
-                {filteredAuthorizations().map((auth) => (
+                {authorizations.map((auth) => (
                   <AuthorizationCard
                     key={auth.id}
                     id={auth.id}
@@ -153,6 +148,7 @@ export default function AuthorizationsPage() {
                     status={auth.status}
                     createdAt={new Date(auth.createdAt)}
                     reviewedAt={auth.reviewedAt ? new Date(auth.reviewedAt) : null}
+                    onView={() => router.push(`/personal/authorizations/${auth.id}`)}
                   />
                 ))}
               </div>

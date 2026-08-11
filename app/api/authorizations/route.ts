@@ -22,15 +22,59 @@ export async function POST(request: NextRequest) {
       serviceId,
       diagnosisCode,
       diagnosisNotes,
+      diagnosis,
+      services,
+      notes,
       quantity,
     } = body;
 
-    if (!hospitalId || !serviceId) {
+    let targetPatientId = patientId;
+    let targetServiceId = serviceId;
+
+    if (!hospitalId) {
       return NextResponse.json(
-        { message: "Missing required fields (hospitalId, serviceId)" },
+        { message: "Hospital selection is required" },
         { status: 400 }
       );
     }
+
+    // Auto-resolve patientId if logged in as PATIENT
+    if (!targetPatientId) {
+      const patient = await prisma.patient.findFirst({
+        where: { userId: session.user.id },
+      });
+      if (patient) {
+        targetPatientId = patient.id;
+      }
+    }
+
+    // Auto-resolve serviceId if not explicitly provided
+    if (!targetServiceId) {
+      const defaultService = await prisma.service.findFirst();
+      if (defaultService) {
+        targetServiceId = defaultService.id;
+      } else {
+        const newService = await prisma.service.create({
+          data: {
+            name: "General Consultation & Service",
+            category: "Consultation",
+            code: "CONS-GENERAL",
+            standardPrice: 5000,
+          },
+        });
+        targetServiceId = newService.id;
+      }
+    }
+
+    // Map diagnosis & services text from patient form
+    const combinedNotes = [
+      diagnosis ? `Diagnosis: ${diagnosis}` : null,
+      services ? `Services: ${services}` : null,
+      notes ? `Notes: ${notes}` : null,
+      diagnosisNotes,
+    ]
+      .filter(Boolean)
+      .join(" | ");
 
     // Find hospital staff ID or fallback
     let staff = await prisma.hospitalStaff.findFirst({
@@ -44,20 +88,24 @@ export async function POST(request: NextRequest) {
     }
 
     if (!staff) {
+      staff = await prisma.hospitalStaff.findFirst();
+    }
+
+    if (!staff) {
       return NextResponse.json(
-        { message: "Hospital staff record not found to submit request" },
+        { message: "No hospital staff record found to process request" },
         { status: 404 }
       );
     }
 
     const authRequest = await authService.createAuthorizationRequest({
-      patientId,
+      patientId: targetPatientId,
       dependentId,
       hospitalId,
       requestedById: staff.id,
-      serviceId,
-      diagnosisCode,
-      diagnosisNotes,
+      serviceId: targetServiceId,
+      diagnosisCode: diagnosisCode || "GENERAL",
+      diagnosisNotes: combinedNotes || "General Request",
       quantity: quantity ? Number(quantity) : 1,
     });
 
@@ -85,10 +133,17 @@ export async function GET(request: NextRequest) {
     const hospitalIdFilter = searchParams.get("hospitalId");
     const hmoIdFilter = searchParams.get("hmoId");
 
-    const where: any = {};
+    const where: Record<string, unknown> = {};
 
-    if (statusFilter && statusFilter !== "ALL") {
-      where.status = statusFilter as AuthStatus;
+    if (statusFilter && statusFilter.toUpperCase() !== "ALL") {
+      const upper = statusFilter.toUpperCase();
+      if (upper === "APPROVED") {
+        where.status = { in: ["APPROVED", "AUTO_APPROVED"] };
+      } else if (upper === "COMPLETED") {
+        where.status = { in: ["APPROVED", "AUTO_APPROVED", "COMPLETED"] };
+      } else {
+        where.status = upper as AuthStatus;
+      }
     }
     if (patientIdFilter) where.patientId = patientIdFilter;
     if (hospitalIdFilter) where.hospitalId = hospitalIdFilter;

@@ -1,4 +1,4 @@
-import { AuthStatus, NotificationType } from "@/lib/enums/AuthStatus";
+import { AuthStatus } from "@/lib/enums/AuthStatus";
 import { UserRole } from "@/lib/enums/UserRole";
 import { v4 as uuidv4 } from "uuid";
 import { prisma } from "@/lib/prisma";
@@ -198,8 +198,20 @@ export class AuthorizationService {
   /**
    * Check if request meets auto-approval criteria
    */
-  async canAutoApprove(request: any) {
-    if (!request.patient?.coveragePlanId) return false;
+  async canAutoApprove(request: {
+    patient?: { coveragePlanId?: string | null; hmoId?: string | null } | null;
+    patientId?: string | null;
+    serviceId?: string | null;
+    hospitalId?: string | null;
+  }) {
+    if (
+      !request.patient?.coveragePlanId ||
+      !request.patient?.hmoId ||
+      !request.serviceId ||
+      !request.hospitalId
+    ) {
+      return false;
+    }
 
     const coverageRule = await prisma.coverageRule.findFirst({
       where: {
