@@ -65,6 +65,7 @@ model Patient {
   // Relations
   authRequests      AuthorizationRequest[]
   dependents        Dependent[]
+  coverageInquiries CoverageInquiry[]
 }
 
 model Dependent {
@@ -344,3 +345,77 @@ model AuditLog {
   userAgent         String?
   timestamp         DateTime          @default(now())
 }
+
+enum CoverageInquiryStatus {
+  PENDING
+  REVIEWED
+  CLOSED
+}
+
+model CoverageInquiry {
+  id           String                 @id @default(cuid())
+  patientId    String
+  patient      Patient                @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medicalTests String                 // JSON array stored as text
+  treatments   String                 // JSON array stored as text
+  drugs        String                 // JSON array stored as text
+  notes        String?
+  status       CoverageInquiryStatus  @default(PENDING)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+}
+
+// ── Org-level RBAC ───────────────────────────────────────────────────────────
+
+enum OrgType {
+  HOSPITAL
+  HMO
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+/// Org-scoped named role with a serialised permissions array.
+model OrgRole {
+  id          String   @id @default(cuid())
+  orgType     OrgType
+  orgId       String
+  name        String
+  permissions String   @default("[]")
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+/// Pending staff invite — token emailed to the invitee.
+model OrgInvite {
+  id          String       @id @default(cuid())
+  token       String       @unique
+  email       String
+  orgType     OrgType
+  orgId       String
+  roleId      String?
+  invitedById String
+  status      InviteStatus @default(PENDING)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime     @default(now())
+}
+
+/// RBAC membership — one per (user, org) pair.
+model OrgMembership {
+  id                  String   @id @default(cuid())
+  userId              String
+  orgType             OrgType
+  orgId               String
+  roleId              String?
+  permissionOverrides String   @default("{\"granted\":[],\"revoked\":[]}")
+  isActive            Boolean  @default(true)
+  joinedAt            DateTime @default(now())
+
+  @@unique([userId, orgId])
+}
+

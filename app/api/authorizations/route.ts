@@ -138,13 +138,20 @@ export async function GET(request: NextRequest) {
     if (statusFilter && statusFilter.toUpperCase() !== "ALL") {
       const upper = statusFilter.toUpperCase();
       if (upper === "APPROVED") {
+        // Include both manual and auto-approved
         where.status = { in: ["APPROVED", "AUTO_APPROVED"] };
       } else if (upper === "COMPLETED") {
-        where.status = { in: ["APPROVED", "AUTO_APPROVED", "COMPLETED"] };
-      } else {
-        where.status = upper as AuthStatus;
+        // "Completed" = approved requests that have had a service delivery recorded
+        where.status = { in: ["APPROVED", "AUTO_APPROVED"] };
+        where.serviceDelivery = { isNot: null };
+      } else if (upper === "PENDING") {
+        where.status = "PENDING" as AuthStatus;
+      } else if (upper === "REJECTED") {
+        where.status = "REJECTED" as AuthStatus;
       }
+      // "ALL" and unknown values fall through with no status filter
     }
+
     if (patientIdFilter) where.patientId = patientIdFilter;
     if (hospitalIdFilter) where.hospitalId = hospitalIdFilter;
     if (hmoIdFilter) {
@@ -216,13 +223,43 @@ export async function GET(request: NextRequest) {
           },
           take: 1,
         },
+        serviceDelivery: true,
       },
       orderBy: {
         requestDate: "desc",
       },
     });
 
-    return NextResponse.json(authRequests);
+    // Transform to the shape the frontend AuthRequest interface expects
+    const transformed = authRequests.map((r) => ({
+      id: r.id,
+      status: r.serviceDelivery ? "COMPLETED" : r.status,
+      createdAt: r.requestDate.toISOString(),
+      authorizationCode: r.authCode ?? "",
+      patient: {
+        user: {
+          name: r.patient?.user
+            ? `${r.patient.user.firstName} ${r.patient.user.lastName}`.trim()
+            : "Unknown",
+        },
+      },
+      hospital: {
+        name: r.hospital?.name ?? "Unknown Hospital",
+      },
+      diagnosis: r.diagnosisNotes ?? r.diagnosisCode ?? "",
+      services: r.service
+        ? [
+            {
+              id: r.service.id,
+              name: r.service.name,
+              cost: r.service.standardPrice ?? 0,
+            },
+          ]
+        : [],
+      reviewedAt: r.reviews[0]?.reviewDate?.toISOString() ?? null,
+    }));
+
+    return NextResponse.json(transformed);
   } catch (error: unknown) {
     console.error("Error fetching authorization requests:", error);
     let message = "Error fetching authorization requests";

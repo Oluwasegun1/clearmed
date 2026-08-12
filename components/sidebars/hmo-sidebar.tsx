@@ -29,10 +29,14 @@ import {
   Hospital,
   UserRound,
   LogOut,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
+import { UserRole } from "@/lib/enums/UserRole";
 
 interface HMOSidebarProps {
   currentPath?: string;
+  role?: UserRole;
 }
 
 export function HMOSidebar({ currentPath }: HMOSidebarProps) {
@@ -114,6 +118,21 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
         },
       ],
     },
+    {
+      title: "Staff & Roles",
+      items: [
+        {
+          title: "Members",
+          href: "/hmo/settings/members",
+          icon: <Users className="h-4 w-4" />,
+        },
+        {
+          title: "Roles & Permissions",
+          href: "/hmo/settings/roles",
+          icon: <ShieldCheck className="h-4 w-4" />,
+        },
+      ],
+    },
   ];
 
   return (
@@ -189,14 +208,16 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
 export function HMOSidebarWrapper({
   children,
   currentPath,
+  role,
 }: {
   children: React.ReactNode;
   currentPath?: string;
+  role?: UserRole;
 }) {
   return (
     <SidebarProvider>
       <div className="flex h-screen">
-        <HMOSidebar currentPath={currentPath} />
+        <HMOSidebar currentPath={currentPath} role={role} />
         <main className="relative flex-1 overflow-hidden">
           <SidebarMobileToggle />
           {children}

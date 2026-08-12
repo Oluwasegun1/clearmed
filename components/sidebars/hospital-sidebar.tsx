@@ -32,6 +32,8 @@ import {
   Microscope,
   Upload,
   LogOut,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 import { UserRole } from "@/lib/enums/UserRole";
 
@@ -139,6 +141,21 @@ export function HospitalSidebar({
           title: "Reports",
           href: "/hospital/reports",
           icon: <ChartBar className="h-4 w-4" />,
+        },
+      ],
+    },
+    {
+      title: "Staff & Roles",
+      items: [
+        {
+          title: "Members",
+          href: "/hospital/settings/members",
+          icon: <Users className="h-4 w-4" />,
+        },
+        {
+          title: "Roles & Permissions",
+          href: "/hospital/settings/roles",
+          icon: <ShieldCheck className="h-4 w-4" />,
         },
       ],
     },

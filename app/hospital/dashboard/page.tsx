@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { HospitalSidebarWrapper } from "@/components/sidebars";
 import {
   Users,
@@ -13,7 +14,10 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
+  CheckCircle2,
+  FileText,
 } from "lucide-react";
+import Link from "next/link";
 
 interface MetricCardProps {
   title: string;
@@ -77,27 +81,9 @@ function BedOccupancy() {
   const departments = [
     { name: "ICU", total: 24, occupied: 22, available: 2, occupancy: 92 },
     { name: "Emergency", total: 18, occupied: 15, available: 3, occupancy: 83 },
-    {
-      name: "General Ward",
-      total: 120,
-      occupied: 95,
-      available: 25,
-      occupancy: 79,
-    },
-    {
-      name: "Pediatrics",
-      total: 30,
-      occupied: 18,
-      available: 12,
-      occupancy: 60,
-    },
-    {
-      name: "Maternity",
-      total: 25,
-      occupied: 12,
-      available: 13,
-      occupancy: 48,
-    },
+    { name: "General Ward", total: 120, occupied: 95, available: 25, occupancy: 79 },
+    { name: "Pediatrics", total: 30, occupied: 18, available: 12, occupancy: 60 },
+    { name: "Maternity", total: 25, occupied: 12, available: 13, occupancy: 48 },
   ];
 
   const getOccupancyColor = (occupancy: number) => {
@@ -148,141 +134,80 @@ function BedOccupancy() {
   );
 }
 
-function RecentAdmissions() {
-  const admissions = [
-    {
-      id: "1",
-      patient: "Sarah Johnson",
-      age: 34,
-      department: "Emergency",
-      condition: "Chest Pain",
-      time: "2 hours ago",
-      priority: "high",
-    },
-    {
-      id: "2",
-      patient: "Michael Chen",
-      age: 67,
-      department: "Cardiology",
-      condition: "Heart Palpitations",
-      time: "4 hours ago",
-      priority: "medium",
-    },
-    {
-      id: "3",
-      patient: "Emma Davis",
-      age: 28,
-      department: "Maternity",
-      condition: "Labor",
-      time: "6 hours ago",
-      priority: "low",
-    },
-    {
-      id: "4",
-      patient: "Robert Wilson",
-      age: 45,
-      department: "Orthopedics",
-      condition: "Fracture",
-      time: "8 hours ago",
-      priority: "medium",
-    },
-  ];
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800";
-      case "low":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
+function RecentRequests({ requests }: { requests: any[] }) {
   return (
     <div className="rounded-lg border bg-card p-6 shadow-sm">
-      <h3 className="text-lg font-semibold mb-4">Recent Admissions</h3>
-      <div className="space-y-4">
-        {admissions.map((admission) => (
-          <div
-            key={admission.id}
-            className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
-                {admission.patient
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Incoming Patient & Pre-Auth Requests</h3>
+        <Link href="/hospital/requests" className="text-xs text-primary hover:underline font-medium">
+          View all →
+        </Link>
+      </div>
+
+      {requests.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">
+          No patient requests received yet.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {requests.slice(0, 5).map((req) => (
+            <div
+              key={req.id}
+              className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors border"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-medium text-sm">
+                  {(req.patientName || "P").charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-medium text-sm">{req.patientName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {req.serviceName} • HMO: {req.hmoName}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-medium">{admission.patient}</p>
-                <p className="text-sm text-muted-foreground">
-                  {admission.condition} • {admission.department}
+              <div className="text-right">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    req.status === "APPROVED" || req.status === "AUTO_APPROVED"
+                      ? "bg-green-100 text-green-800"
+                      : req.status === "PENDING"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {req.status}
+                </span>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {new Date(req.requestDate).toLocaleDateString()}
                 </p>
               </div>
             </div>
-            <div className="text-right">
-              <span
-                className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(
-                  admission.priority,
-                )}`}
-              >
-                {admission.priority}
-              </span>
-              <p className="text-xs text-muted-foreground mt-1">
-                {admission.time}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function StaffOverview() {
-  const staffData = [
-    { role: "Doctors", total: 45, onDuty: 32, available: 13 },
-    { role: "Nurses", total: 120, onDuty: 85, available: 35 },
-    { role: "Technicians", total: 28, onDuty: 20, available: 8 },
-    { role: "Support Staff", total: 65, onDuty: 42, available: 23 },
-  ];
-
-  return (
-    <div className="rounded-lg border bg-card p-6 shadow-sm">
-      <h3 className="text-lg font-semibold mb-4">Staff Overview</h3>
-      <div className="space-y-4">
-        {staffData.map((staff) => (
-          <div key={staff.role} className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <UserCheck className="h-5 w-5 text-primary" />
-              <span className="font-medium">{staff.role}</span>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="text-center">
-                <p className="font-medium text-green-600">{staff.onDuty}</p>
-                <p className="text-muted-foreground">On Duty</p>
-              </div>
-              <div className="text-center">
-                <p className="font-medium text-blue-600">{staff.available}</p>
-                <p className="text-muted-foreground">Available</p>
-              </div>
-              <div className="text-center">
-                <p className="font-medium">{staff.total}</p>
-                <p className="text-muted-foreground">Total</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function HospitalDashboard() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/hospital/requests")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setRequests(data);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalCount = requests.length;
+  const pendingCount = requests.filter((r) => r.status === "PENDING").length;
+  const approvedCount = requests.filter((r) => r.status === "APPROVED" || r.status === "AUTO_APPROVED").length;
+
   return (
     <HospitalSidebarWrapper currentPath="/hospital/dashboard">
       <div className="flex h-full flex-col">
@@ -292,13 +217,13 @@ export default function HospitalDashboard() {
             <div>
               <h1 className="text-3xl font-bold">Hospital Dashboard</h1>
               <p className="text-muted-foreground">
-                Monitor patient care and hospital operations
+                Monitor incoming patient requests, authorizations, and hospital operations
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-muted-foreground">Current Time</p>
+              <p className="text-sm text-muted-foreground">Live Sync</p>
               <p className="text-sm font-medium">
-                {new Date().toLocaleString()}
+                {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
@@ -309,11 +234,27 @@ export default function HospitalDashboard() {
           {/* Metrics Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <MetricCard
-              title="Total Patients"
-              value="342"
-              change="+8.2%"
+              title="Total Requests"
+              value={String(totalCount)}
+              change="+Live"
               trend="up"
-              icon={<Users className="h-5 w-5" />}
+              icon={<FileText className="h-5 w-5" />}
+            />
+            <MetricCard
+              title="Pending Authorization"
+              value={String(pendingCount)}
+              change="Active"
+              trend="up"
+              icon={<Clock className="h-5 w-5" />}
+              color="orange"
+            />
+            <MetricCard
+              title="Approved Pre-Auths"
+              value={String(approvedCount)}
+              change="+Ok"
+              trend="up"
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              color="green"
             />
             <MetricCard
               title="Bed Occupancy"
@@ -321,176 +262,14 @@ export default function HospitalDashboard() {
               change="-2.1%"
               trend="down"
               icon={<Bed className="h-5 w-5" />}
-            />
-            <MetricCard
-              title="Staff on Duty"
-              value="179"
-              change="+5.3%"
-              trend="up"
-              icon={<UserCheck className="h-5 w-5" />}
-            />
-            <MetricCard
-              title="Emergency Cases"
-              value="23"
-              change="+12.5%"
-              trend="up"
-              icon={<Activity className="h-5 w-5" />}
+              color="blue"
             />
           </div>
 
           {/* Charts and Tables */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <BedOccupancy />
-            <RecentAdmissions />
-          </div>
-
-          {/* Additional Information */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <StaffOverview />
-
-            <div className="rounded-lg border bg-card p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Todays Schedule</h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <div>
-                    <p className="font-medium text-blue-800">Morning Rounds</p>
-                    <p className="text-sm text-blue-700">
-                      8:00 AM - All departments
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
-                  <Stethoscope className="h-5 w-5 text-green-600" />
-                  <div>
-                    <p className="font-medium text-green-800">
-                      Surgery Schedule
-                    </p>
-                    <p className="text-sm text-green-700">
-                      10:30 AM - OR 3, Cardiac Surgery
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-                  <Clock className="h-5 w-5 text-yellow-600" />
-                  <div>
-                    <p className="font-medium text-yellow-800">Staff Meeting</p>
-                    <p className="text-sm text-yellow-700">
-                      2:00 PM - Conference Room A
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-purple-50 border border-purple-200">
-                  <Heart className="h-5 w-5 text-purple-600" />
-                  <div>
-                    <p className="font-medium text-purple-800">
-                      Emergency Drill
-                    </p>
-                    <p className="text-sm text-purple-700">
-                      4:00 PM - All departments
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Alerts and Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-lg border bg-card p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Critical Alerts</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-start gap-2 p-2 rounded bg-red-50 border border-red-200">
-                  <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-red-800">
-                      ICU at Capacity
-                    </p>
-                    <p className="text-xs text-red-700">22/24 beds occupied</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 p-2 rounded bg-yellow-50 border border-yellow-200">
-                  <Clock className="h-4 w-4 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-yellow-800">
-                      Equipment Maintenance
-                    </p>
-                    <p className="text-xs text-yellow-700">
-                      MRI scheduled for 6 PM
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border bg-card p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Activity className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Patient Flow</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Admissions Today
-                  </span>
-                  <span className="font-medium">28</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Discharges Today
-                  </span>
-                  <span className="font-medium">22</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Transfers
-                  </span>
-                  <span className="font-medium">6</span>
-                </div>
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium">Net Change</span>
-                    <span className="font-bold text-green-600">+6</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border bg-card p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Heart className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Quality Metrics</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Patient Satisfaction
-                  </span>
-                  <span className="font-medium text-green-600">4.8/5</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Average Wait Time
-                  </span>
-                  <span className="font-medium">12 min</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">
-                    Readmission Rate
-                  </span>
-                  <span className="font-medium text-green-600">2.1%</span>
-                </div>
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm font-medium">Overall Score</span>
-                    <span className="font-bold text-green-600">A+</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <RecentRequests requests={requests} />
           </div>
         </div>
       </div>

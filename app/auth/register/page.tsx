@@ -288,28 +288,30 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Role Selection */}
+              {/* Role — patients only */}
               <div className="space-y-2">
-                <label
-                  htmlFor="role"
-                  className="text-sm font-medium text-foreground"
-                >
-                  I am a
+                <label className="text-sm font-medium text-foreground">
+                  Account type
                 </label>
-                <select
-                  id="role"
-                  name="role"
-                  value={formData.role}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground"
-                >
-                  <option value="PATIENT">Patient</option>
-                  <option value="DOCTOR">Doctor</option>
-                  <option value="HOSPITAL_ADMIN">Hospital Administrator</option>
-                  <option value="PHARMACY">Pharmacist</option>
-                  <option value="LAB">Lab Technician</option>
-                  <option value="HMO_STAFF">HMO Staff</option>
-                </select>
+                <div className="w-full px-4 py-3 bg-muted border border-border rounded-lg text-foreground text-sm flex items-center gap-2">
+                  <span>Patient</span>
+                  <span className="text-muted-foreground text-xs ml-1">(self-registration is for patients only)</span>
+                </div>
+                <input type="hidden" name="role" value="PATIENT" />
+              </div>
+
+              {/* Org registration link */}
+              <div className="rounded-lg border border-border bg-card/50 p-4 flex items-start gap-3">
+                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-foreground">Registering a Hospital or HMO?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Staff members join via invite links from their org Admin.</p>
+                  <a href="/auth/org-signup" className="text-xs text-primary font-medium hover:underline mt-1 inline-block">
+                    Register your organisation →
+                  </a>
+                </div>
               </div>
 
               {/* Password Fields */}

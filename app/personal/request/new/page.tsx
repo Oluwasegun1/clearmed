@@ -64,8 +64,6 @@ export default function MakeRequestNewPage() {
   const [requestKind, setRequestKind] = useState<"appointment" | "tests" | "both">("appointment");
   const [diagnosis, setDiagnosis] = useState("");
   const [hospitalNotes, setHospitalNotes] = useState("");
-  const [patientId, setPatientId] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
@@ -81,20 +79,6 @@ export default function MakeRequestNewPage() {
     fetchHospitals();
   }, []);
 
-  useEffect(() => {
-    const fetchPatient = async () => {
-      try {
-        const response = await fetch("/api/patient/profile");
-        if (response.ok) {
-          const data = await response.json();
-          setPatientId(data?.id ?? null);
-        }
-      } catch {
-        setPatientId(null);
-      }
-    };
-    fetchPatient();
-  }, []);
 
   const addItem = (
     list: string[],
@@ -148,42 +132,21 @@ export default function MakeRequestNewPage() {
   const handleSubmitHospital = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
-    if (!patientId || !hospitalId || !diagnosis.trim()) {
-      setError("Please select a hospital and enter diagnosis.");
+    if (!hospitalId || !diagnosis.trim()) {
+      setError("Please select a hospital and enter a diagnosis / reason.");
       return;
     }
     setIsSubmitting(true);
     try {
-      // Use first available service or a placeholder; backend may expect serviceIds from catalog
-      let servicesList: { id: string }[] = await fetch(
-        `/api/services?hospitalId=${hospitalId}`
-      )
-        .then((res) => res.json())
-        .catch(() => []);
-      if (!Array.isArray(servicesList) || servicesList.length === 0) {
-        servicesList = await fetch("/api/services")
-          .then((res) => res.json())
-          .catch(() => []);
-      }
-      const serviceIds =
-        Array.isArray(servicesList) && servicesList.length > 0
-          ? servicesList.slice(0, 5).map((s: { id: string }) => s.id)
-          : [];
-      if (serviceIds.length === 0) {
-        setError(
-          "No services available. Please contact support or try again later."
-        );
-        setIsSubmitting(false);
-        return;
-      }
+      // patientId and serviceId are auto-resolved server-side from the session.
+      // We just pass the form fields the backend needs.
       const response = await fetch("/api/authorizations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patientId,
           hospitalId,
-          serviceIds,
           diagnosis: diagnosis.trim(),
+          services: requestKind, // appointment | tests | both – stored in diagnosisNotes
           notes: hospitalNotes.trim() || undefined,
         }),
       });
