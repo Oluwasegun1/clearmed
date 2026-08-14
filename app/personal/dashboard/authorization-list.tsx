@@ -1,8 +1,8 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ListCard, ListCardItem, StatusBadge } from "@/components/shared";
 import {
   FileText,
   Clock,
@@ -72,42 +72,26 @@ export default function AuthorizationList() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "approved":
-        return <CheckCircle className="h-4 w-4 text-green-400" />;
+        return CheckCircle;
       case "denied":
-        return <XCircle className="h-4 w-4 text-red-400" />;
+        return XCircle;
       case "expired":
-        return <AlertCircle className="h-4 w-4 text-orange-400" />;
+        return AlertCircle;
       default:
-        return <Clock className="h-4 w-4 text-yellow-400" />;
+        return Clock;
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusIconColor = (status: string) => {
     switch (status) {
       case "approved":
-        return (
-          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-            Approved
-          </Badge>
-        );
+        return "bg-green-500/10 text-green-600 dark:text-green-400";
       case "denied":
-        return (
-          <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
-            Denied
-          </Badge>
-        );
+        return "bg-red-500/10 text-red-600 dark:text-red-400";
       case "expired":
-        return (
-          <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">
-            Expired
-          </Badge>
-        );
+        return "bg-orange-500/10 text-orange-600 dark:text-orange-400";
       default:
-        return (
-          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
-            Pending
-          </Badge>
-        );
+        return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
     }
   };
 
@@ -117,7 +101,7 @@ export default function AuthorizationList() {
         return (
           <Badge
             variant="outline"
-            className="border-red-500/30 text-red-400 text-xs"
+            className="border-red-500/30 text-red-600 dark:text-red-400 text-xs px-2.5 py-0.5 rounded-full"
           >
             High Priority
           </Badge>
@@ -126,7 +110,7 @@ export default function AuthorizationList() {
         return (
           <Badge
             variant="outline"
-            className="border-orange-500/30 text-orange-400 text-xs"
+            className="border-orange-500/30 text-orange-600 dark:text-orange-400 text-xs px-2.5 py-0.5 rounded-full"
           >
             Medium Priority
           </Badge>
@@ -135,7 +119,7 @@ export default function AuthorizationList() {
         return (
           <Badge
             variant="outline"
-            className="border-blue-500/30 text-blue-400 text-xs"
+            className="border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs px-2.5 py-0.5 rounded-full"
           >
             Low Priority
           </Badge>
@@ -161,66 +145,54 @@ export default function AuthorizationList() {
   };
 
   return (
-    <Card className="border-white/10 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm">
-      <CardHeader>
-        <CardTitle className="flex items-center text-white">
-          <FileText className="h-5 w-5 mr-2 text-blue-400" />
-          Recent Authorization Requests
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {mockAuthorizations.map((auth) => (
-            <div
-              key={auth.id}
-              className="p-4 border border-white/10 rounded-lg bg-white/5 hover:bg-white/10 transition-all duration-200"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 mt-1">
-                    {getStatusIcon(auth.status)}
+    <ListCard
+      title="Recent Authorization Requests"
+      className="border-border bg-card/60 backdrop-blur-sm"
+    >
+      <div className="space-y-4 pt-2">
+        {mockAuthorizations.map((auth) => (
+          <ListCardItem
+            key={auth.id}
+            icon={getStatusIcon(auth.status)}
+            iconBg={getStatusIconColor(auth.status)}
+            title={
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold text-foreground">{auth.type}</h4>
+                {getUrgencyBadge(auth.urgency)}
+              </div>
+            }
+            subtitle={
+              <div className="space-y-2 mt-1">
+                <p className="text-sm text-muted-foreground">
+                  {auth.description}
+                </p>
+                <div className="flex items-center space-x-4 text-xs text-muted-foreground flex-wrap gap-y-1">
+                  <div className="flex items-center space-x-1">
+                    <User className="h-3.5 w-3.5" />
+                    <span>{auth.provider}</span>
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <h4 className="font-semibold text-white">{auth.type}</h4>
-                      {getUrgencyBadge(auth.urgency)}
-                    </div>
-                    <p className="text-sm text-white/80 mb-2">
-                      {auth.description}
-                    </p>
-                    <div className="flex items-center space-x-4 text-xs text-white/60">
-                      <div className="flex items-center space-x-1">
-                        <User className="h-3 w-3" />
-                        <span>{auth.provider}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-3 w-3" />
-                        <span>{formatDate(auth.requestDate)}</span>
-                      </div>
-                      {auth.estimatedCost && (
-                        <div className="flex items-center space-x-1">
-                          <span>
-                            Est. Cost: {formatCurrency(auth.estimatedCost)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex items-center space-x-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>{formatDate(auth.requestDate)}</span>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  {getStatusBadge(auth.status)}
+                  {auth.estimatedCost && (
+                    <div className="flex items-center space-x-1">
+                      <span className="font-medium text-foreground">
+                        Est. Cost: {formatCurrency(auth.estimatedCost)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-white/50">
-                  Request ID: {auth.id}
-                </div>
-                <div className="flex space-x-2">
+            }
+            action={
+              <div className="flex flex-col items-end gap-3">
+                <StatusBadge status={auth.status} />
+                <div className="flex space-x-1">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-white/70 hover:text-white hover:bg-white/10 text-xs"
+                    className="text-xs text-muted-foreground hover:text-foreground h-7"
                   >
                     View Details
                   </Button>
@@ -228,7 +200,7 @@ export default function AuthorizationList() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-white/20 bg-white/5 text-white hover:bg-white/10 text-xs"
+                      className="border-border text-foreground hover:bg-muted text-xs h-7"
                     >
                       Follow Up
                     </Button>
@@ -237,29 +209,29 @@ export default function AuthorizationList() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-orange-500/30 bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 text-xs"
+                      className="border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 text-xs h-7"
                     >
                       Appeal
                     </Button>
                   )}
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            }
+          />
+        ))}
 
         {mockAuthorizations.length === 0 && (
           <div className="text-center py-8">
-            <FileText className="h-12 w-12 text-white/30 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white/70 mb-2">
+            <FileText className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-muted-foreground mb-2">
               No Authorization Requests
             </h3>
-            <p className="text-white/50">
+            <p className="text-sm text-muted-foreground">
               You haven&apos;t submitted any authorization requests yet.
             </p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </ListCard>
   );
 }

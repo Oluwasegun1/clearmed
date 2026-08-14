@@ -33,6 +33,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { UserRole } from "@/lib/enums/UserRole";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface HMOSidebarProps {
   currentPath?: string;
@@ -193,6 +194,7 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
           >
             Settings
           </SidebarNavItem>
+          <ThemeToggle collapsed={isCollapsed} />
           <SidebarNavItem
             href="/api/auth/signout?callbackUrl=/auth/login"
             icon={<LogOut className="h-4 w-4" />}
@@ -218,7 +220,7 @@ export function HMOSidebarWrapper({
     <SidebarProvider>
       <div className="flex h-screen">
         <HMOSidebar currentPath={currentPath} role={role} />
-        <main className="relative flex-1 overflow-hidden">
+        <main className="relative flex-1 overflow-y-auto">
           <SidebarMobileToggle />
           {children}
         </main>

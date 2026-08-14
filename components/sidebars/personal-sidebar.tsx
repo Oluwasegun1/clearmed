@@ -30,6 +30,7 @@ import {
   UserCog,
   LogOut,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface PersonalSidebarProps {
   currentPath?: string;
@@ -189,6 +190,7 @@ export function PersonalSidebar({ currentPath }: PersonalSidebarProps) {
           >
             Profile & Settings
           </SidebarNavItem>
+          <ThemeToggle collapsed={isCollapsed} />
           <SidebarNavItem
             href="/api/auth/signout?callbackUrl=/auth/login"
             icon={<LogOut className="h-4 w-4" />}
@@ -212,7 +214,7 @@ export function PersonalSidebarWrapper({
     <SidebarProvider>
       <div className="flex h-screen">
         <PersonalSidebar currentPath={currentPath} />
-        <main className="relative flex-1 overflow-hidden">
+        <main className="relative flex-1 overflow-y-auto">
           <SidebarMobileToggle />
           {children}
         </main>

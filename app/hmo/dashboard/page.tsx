@@ -1,63 +1,23 @@
 "use client";
 
-import type React from "react";
-
 import { HMOSidebarWrapper } from "@/components/sidebars";
 import {
   Building2,
   Users,
   FileText,
   DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Activity,
   AlertTriangle,
   Zap,
 } from "lucide-react";
-
-interface MetricCardProps {
-  title: string;
-  value: string;
-  change: string;
-  trend: "up" | "down";
-  icon: React.ReactNode;
-}
-
-function MetricCard({ title, value, change, trend, icon }: MetricCardProps) {
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl transition-all duration-300 hover:border-white/20 hover:bg-gradient-to-br hover:from-white/10 hover:to-white/[0.05]">
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-orange-500/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-      <div className="relative flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-orange-500/20 text-white backdrop-blur-sm">
-            {icon}
-          </div>
-          <div>
-            <p className="text-sm font-medium text-white/70">{title}</p>
-            <p className="text-3xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-              {value}
-            </p>
-          </div>
-        </div>
-        <div
-          className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium backdrop-blur-sm ${
-            trend === "up"
-              ? "bg-green-500/20 text-green-300 border border-green-500/30"
-              : "bg-red-500/20 text-red-300 border border-red-500/30"
-          }`}
-        >
-          {trend === "up" ? (
-            <TrendingUp className="h-4 w-4" />
-          ) : (
-            <TrendingDown className="h-4 w-4" />
-          )}
-          {change}
-        </div>
-      </div>
-    </div>
-  );
-}
+import {
+  PageShell,
+  PageHeader,
+  MetricCard,
+  ListCard,
+  ListCardItem,
+  StatusBadge,
+  ProgressBar,
+} from "@/components/shared";
 
 interface RecentActivityItem {
   id: string;
@@ -104,64 +64,52 @@ function RecentActivity() {
     },
   ];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "success":
-        return "bg-green-500/20 text-green-300 border-green-500/30";
-      case "pending":
-        return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
-      case "warning":
-        return "bg-orange-500/20 text-orange-300 border-orange-500/30";
-      case "error":
-        return "bg-red-500/20 text-red-300 border-red-500/30";
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case "claim":
+        return FileText;
+      case "enrollment":
+        return Users;
+      case "payment":
+        return DollarSign;
       default:
-        return "bg-white/10 text-white/70 border-white/20";
+        return AlertTriangle;
+    }
+  };
+
+  const getActivityIconBg = (type: string) => {
+    switch (type) {
+      case "claim":
+        return "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+      case "enrollment":
+        return "bg-purple-500/10 text-purple-600 dark:text-purple-400";
+      case "payment":
+        return "bg-green-500/10 text-green-600 dark:text-green-400";
+      default:
+        return "bg-amber-500/10 text-amber-600 dark:text-amber-400";
     }
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl">
-      <h3 className="text-xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent mb-6">
-        Recent Activity
-      </h3>
-      <div className="space-y-4">
+    <ListCard title="Recent Activity" className="h-full">
+      <div className="space-y-2 pt-2">
         {activities.map((activity) => (
-          <div
+          <ListCardItem
             key={activity.id}
-            className="group flex items-start gap-4 p-4 rounded-xl hover:bg-white/5 transition-all duration-300 border border-transparent hover:border-white/10"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-orange-500/20 text-white backdrop-blur-sm">
-              {activity.type === "claim" && <FileText className="h-5 w-5" />}
-              {activity.type === "enrollment" && <Users className="h-5 w-5" />}
-              {activity.type === "payment" && (
-                <DollarSign className="h-5 w-5" />
-              )}
-              {activity.type === "alert" && (
-                <AlertTriangle className="h-5 w-5" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-sm font-semibold text-white">
-                  {activity.title}
-                </p>
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                    activity.status
-                  )}`}
-                >
-                  {activity.status}
-                </span>
+            icon={getActivityIcon(activity.type)}
+            iconBg={getActivityIconBg(activity.type)}
+            title={<span className="font-semibold">{activity.title}</span>}
+            subtitle={activity.description}
+            action={
+              <div className="flex flex-col items-end gap-1.5">
+                <StatusBadge status={activity.status} />
+                <span className="text-[10px] text-muted-foreground">{activity.time}</span>
               </div>
-              <p className="text-sm text-white/70 mb-1">
-                {activity.description}
-              </p>
-              <p className="text-xs text-white/50">{activity.time}</p>
-            </div>
-          </div>
+            }
+          />
         ))}
       </div>
-    </div>
+    </ListCard>
   );
 }
 
@@ -200,243 +148,173 @@ function TopHospitals() {
   ];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl">
-      <h3 className="text-xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent mb-6">
-        Top Hospitals by Claims
-      </h3>
-      <div className="space-y-4">
+    <ListCard title="Top Hospitals by Claims" className="h-full">
+      <div className="space-y-4 pt-2">
         {hospitals.map((hospital, index) => (
           <div
             key={hospital.name}
-            className="group flex items-center justify-between p-4 rounded-xl hover:bg-white/5 transition-all duration-300 border border-transparent hover:border-white/10"
+            className="p-3.5 border border-border/50 rounded-xl bg-card/50 hover:bg-muted/40 transition-colors flex items-center justify-between gap-4"
           >
-            <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/30 to-orange-500/30 text-white font-bold backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold text-sm flex items-center justify-center shrink-0">
                 {index + 1}
               </div>
               <div>
-                <p className="font-semibold text-white">{hospital.name}</p>
-                <p className="text-sm text-white/70">
-                  {hospital.claims} claims
-                </p>
+                <p className="font-semibold text-sm text-foreground">{hospital.name}</p>
+                <p className="text-xs text-muted-foreground">{hospital.claims} claims</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="font-bold text-white">{hospital.amount}</p>
+            <div className="text-right space-y-1">
+              <p className="font-bold text-sm text-foreground">{hospital.amount}</p>
               <div className="flex items-center gap-2">
-                <div className="w-16 h-2 bg-white/10 rounded-full overflow-hidden">
+                <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-orange-500 rounded-full transition-all duration-500"
+                    className="h-full bg-primary rounded-full"
                     style={{ width: `${hospital.utilization}%` }}
                   />
                 </div>
-                <p className="text-sm text-white/70">{hospital.utilization}%</p>
+                <span className="text-[10px] text-muted-foreground">{hospital.utilization}%</span>
               </div>
             </div>
           </div>
         ))}
       </div>
-    </div>
+    </ListCard>
   );
 }
 
 export default function HMODashboard() {
   return (
     <HMOSidebarWrapper currentPath="/hmo/dashboard">
-      <div className="flex h-full flex-col bg-black relative overflow-x-hidden overflow-y-auto min-h-screen">
-        {/* Animated background grid - pointer-events-none so content is clickable/scrollable */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)] pointer-events-none" />
-
-        {/* Floating orbs */}
-        <div className="absolute top-20 left-20 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse pointer-events-none" />
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse delay-1000 pointer-events-none" />
-
+      <PageShell>
         {/* Header */}
-        <div className="relative border-b border-white/10 bg-gradient-to-r from-black/50 to-black/30 backdrop-blur-xl p-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-white via-purple-200 to-orange-200 bg-clip-text text-transparent mb-2">
-                HMO Dashboard
-              </h1>
-              <p className="text-white/70 text-lg">
-                Monitor your health management organizations performance
+        <PageHeader
+          title="HMO Dashboard"
+          subtitle="Monitor your health management organization's performance"
+          actions={
+            <div className="text-right shrink-0">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                Last updated
+              </p>
+              <p className="text-sm font-semibold text-foreground mt-0.5">
+                {new Date().toLocaleDateString()}
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-white/50 mb-1">Last updated</p>
-              <p className="text-sm font-medium text-white/80">
-                {new Date().toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Main Content */}
-        <div className="relative flex-1 overflow-y-auto p-8">
+        <div className="p-6 space-y-6 flex-1 overflow-y-auto">
           {/* Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <MetricCard
-              title="Total Members"
+              label="Total Members"
               value="24,567"
-              change="+12.5%"
+              badge="+12.5%"
               trend="up"
-              icon={<Users className="h-6 w-6" />}
+              icon={Users}
+              iconColor="primary"
             />
             <MetricCard
-              title="Active Claims"
+              label="Active Claims"
               value="1,234"
-              change="-3.2%"
+              badge="-3.2%"
               trend="down"
-              icon={<FileText className="h-6 w-6" />}
+              icon={FileText}
+              iconColor="blue"
             />
             <MetricCard
-              title="Network Hospitals"
+              label="Network Hospitals"
               value="156"
-              change="+8.1%"
+              badge="+8.1%"
               trend="up"
-              icon={<Building2 className="h-6 w-6" />}
+              icon={Building2}
+              iconColor="purple"
             />
             <MetricCard
-              title="Monthly Revenue"
+              label="Monthly Revenue"
               value="$8.2M"
-              change="+15.3%"
+              badge="+15.3%"
               trend="up"
-              icon={<DollarSign className="h-6 w-6" />}
+              icon={DollarSign}
+              iconColor="green"
             />
           </div>
 
           {/* Charts and Tables */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <RecentActivity />
             <TopHospitals />
           </div>
 
           {/* Additional Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-orange-500/20 text-white backdrop-blur-sm">
-                  <Activity className="h-5 w-5" />
-                </div>
-                <h3 className="text-xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-                  Utilization Rate
-                </h3>
-              </div>
-              <div className="space-y-6">
+            <ListCard title="Utilization Rate">
+              <div className="space-y-4 pt-2">
                 {[
-                  { name: "Emergency Care", rate: 87 },
-                  { name: "Outpatient", rate: 72 },
-                  { name: "Specialist Care", rate: 65 },
+                  { name: "Emergency Care", rate: 87, color: "red" as const },
+                  { name: "Outpatient", rate: 72, color: "yellow" as const },
+                  { name: "Specialist Care", rate: 65, color: "green" as const },
                 ].map((item) => (
-                  <div key={item.name}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-white/80">
-                        {item.name}
-                      </span>
-                      <span className="text-sm font-bold text-white">
-                        {item.rate}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
-                      <div
-                        className="bg-gradient-to-r from-purple-500 to-orange-500 h-3 rounded-full transition-all duration-1000 ease-out"
-                        style={{ width: `${item.rate}%` }}
-                      />
-                    </div>
-                  </div>
+                  <ProgressBar
+                    key={item.name}
+                    label={item.name}
+                    value={item.rate}
+                    color={item.color}
+                  />
                 ))}
               </div>
-            </div>
+            </ListCard>
 
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-orange-500/20 text-white backdrop-blur-sm">
-                  <DollarSign className="h-5 w-5" />
+            <ListCard title="Cost Analysis">
+              <div className="space-y-3 pt-2 text-sm">
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-muted-foreground">Average Cost per Member</span>
+                  <span className="font-semibold text-foreground">$334</span>
                 </div>
-                <h3 className="text-xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-                  Cost Analysis
-                </h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/70">
-                    Average Cost per Member
-                  </span>
-                  <span className="font-semibold text-white">$334</span>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-muted-foreground">Claims Processing Cost</span>
+                  <span className="font-semibold text-foreground">$12.50</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/70">
-                    Claims Processing Cost
-                  </span>
-                  <span className="font-semibold text-white">$12.50</span>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-muted-foreground">Administrative Cost</span>
+                  <span className="font-semibold text-foreground">$45.20</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/70">
-                    Administrative Cost
-                  </span>
-                  <span className="font-semibold text-white">$45.20</span>
-                </div>
-                <div className="border-t border-white/10 pt-4 mt-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold text-white/90">
-                      Total Monthly Cost
-                    </span>
-                    <span className="font-bold text-xl bg-gradient-to-r from-purple-400 to-orange-400 bg-clip-text text-transparent">
-                      $6.8M
-                    </span>
-                  </div>
+                <div className="border-t border-border pt-3 mt-3 flex justify-between items-center">
+                  <span className="font-semibold text-foreground">Total Monthly Cost</span>
+                  <span className="font-bold text-lg text-primary">$6.8M</span>
                 </div>
               </div>
-            </div>
+            </ListCard>
 
-            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-orange-500/20 text-white backdrop-blur-sm">
-                  <AlertTriangle className="h-5 w-5" />
-                </div>
-                <h3 className="text-xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-                  Alerts & Notifications
-                </h3>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 backdrop-blur-sm">
-                  <AlertTriangle className="h-5 w-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+            <ListCard title="Alerts & Notifications">
+              <div className="space-y-3 pt-2">
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-yellow-300">
-                      High Utilization
-                    </p>
-                    <p className="text-xs text-yellow-400/80">
-                      Cardiology dept at 95% capacity
-                    </p>
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">High Utilization</p>
+                    <p className="text-xs text-muted-foreground">Cardiology dept at 95% capacity</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 backdrop-blur-sm">
-                  <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-red-300">
-                      Overdue Claims
-                    </p>
-                    <p className="text-xs text-red-400/80">
-                      23 claims pending review
-                    </p>
+                    <p className="text-sm font-semibold text-red-600 dark:text-red-400">Overdue Claims</p>
+                    <p className="text-xs text-muted-foreground">23 claims pending review</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 backdrop-blur-sm">
-                  <Zap className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <Zap className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-300">
-                      System Update
-                    </p>
-                    <p className="text-xs text-blue-400/80">
-                      Scheduled maintenance tonight
-                    </p>
+                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">System Update</p>
+                    <p className="text-xs text-muted-foreground">Scheduled maintenance tonight</p>
                   </div>
                 </div>
               </div>
-            </div>
+            </ListCard>
           </div>
         </div>
-      </div>
+      </PageShell>
     </HMOSidebarWrapper>
   );
 }
