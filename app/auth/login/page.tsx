@@ -193,17 +193,14 @@ function LoginContent() {
     }
   }, [roleParam]);
 
-  // Handle demo role pill click
-  const selectDemoRole = (role: DemoRole, autoSubmit = false) => {
+  // Handle demo role pill click for instant sign-in
+  const selectDemoRole = (role: DemoRole) => {
     setEmail(role.email);
     setPassword("password123");
     setSelectedDemoRole(role.id);
     setError("");
-    toast.success(`Loaded credentials for ${role.label}`, { icon: "🔑" });
-
-    if (autoSubmit) {
-      performLogin(role.email, "password123");
-    }
+    toast.success(`Signing in as ${role.label}...`, { icon: "⚡" });
+    performLogin(role.email, "password123");
   };
 
   // Detect Caps Lock state
@@ -369,7 +366,7 @@ function LoginContent() {
                 Quick Demo Sign-In
               </span>
               <span className="text-xs text-muted-foreground">
-                Select role to pre-fill
+                Click any role for instant sign-in
               </span>
             </div>
 
@@ -382,7 +379,8 @@ function LoginContent() {
                   <button
                     key={role.id}
                     type="button"
-                    onClick={() => selectDemoRole(role, false)}
+                    disabled={isLoading}
+                    onClick={() => selectDemoRole(role)}
                     className={`relative p-2.5 rounded-xl border text-left transition-all duration-200 group flex flex-col justify-between ${
                       isSelected
                         ? "bg-primary/10 border-primary shadow-sm ring-1 ring-primary"
@@ -415,37 +413,6 @@ function LoginContent() {
                 );
               })}
             </div>
-
-            {selectedDemoRole && (
-              <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between animate-fadeIn">
-                <div className="flex items-center space-x-2 text-xs">
-                  <Info className="w-4 h-4 text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground">
-                    Selected:{" "}
-                    <strong className="text-foreground font-medium">
-                      {
-                        DEMO_ROLES.find((r) => r.id === selectedDemoRole)
-                          ?.label
-                      }
-                    </strong>{" "}
-                    ({email})
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    const role = DEMO_ROLES.find((r) => r.id === selectedDemoRole);
-                    if (role) selectDemoRole(role, true);
-                  }}
-                  disabled={isLoading}
-                  className="h-7 px-3 text-xs bg-primary hover:bg-primary/90"
-                >
-                  <Zap className="w-3 h-3 mr-1" />
-                  Quick Login
-                </Button>
-              </div>
-            )}
           </div>
 
           {/* Login Form */}

@@ -19,6 +19,7 @@ import {
   EyeOff,
   CheckCircle,
   AlertCircle,
+  XCircle,
 } from "lucide-react";
 import type { UserRole } from "@/lib/enums/UserRole";
 
@@ -37,24 +38,20 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0);
+
+  const passwordCriteria = {
+    minChar: formData.password.length >= 8,
+    hasUpper: /[A-Z]/.test(formData.password),
+    hasLower: /[a-z]/.test(formData.password),
+    hasNumber: /[0-9]/.test(formData.password),
+    passwordsMatch: formData.password.length > 0 && formData.password === formData.confirmPassword,
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Calculate password strength
-    if (name === "password") {
-      let strength = 0;
-      if (value.length >= 8) strength++;
-      if (/[A-Z]/.test(value)) strength++;
-      if (/[a-z]/.test(value)) strength++;
-      if (/[0-9]/.test(value)) strength++;
-      if (/[^A-Za-z0-9]/.test(value)) strength++;
-      setPasswordStrength(strength);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,9 +59,15 @@ export default function RegisterPage() {
     setIsLoading(true);
     setError("");
 
-    // Validate passwords match
+    // Front-end validations
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phoneNumber || !formData.password || !formData.confirmPassword) {
+      setError("Please fill out all required fields.");
+      setIsLoading(false);
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      setError("Password confirmation does not match.");
       setIsLoading(false);
       return;
     }
@@ -78,6 +81,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email: formData.email,
           password: formData.password,
+          confirmPassword: formData.confirmPassword,
           firstName: formData.firstName,
           lastName: formData.lastName,
           phoneNumber: formData.phoneNumber,
@@ -103,21 +107,9 @@ export default function RegisterPage() {
     }
   };
 
-  const getPasswordStrengthColor = () => {
-    if (passwordStrength <= 2) return "bg-destructive";
-    if (passwordStrength <= 3) return "bg-accent";
-    return "bg-primary";
-  };
-
-  const getPasswordStrengthText = () => {
-    if (passwordStrength <= 2) return "Weak";
-    if (passwordStrength <= 3) return "Medium";
-    return "Strong";
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden overflow-y-auto relative">
-      {/* Background effects - pointer-events-none so they don't block clicks/scroll */}
+      {/* Background effects */}
       <div className="fixed inset-0 grid-pattern opacity-20 pointer-events-none" />
 
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -165,7 +157,7 @@ export default function RegisterPage() {
           <div className="text-center mb-12">
             <Badge variant="secondary" className="mb-6 px-4 py-2 text-sm">
               <CheckCircle className="w-4 h-4 mr-2" />
-              Join 10,000+ healthcare professionals
+              Join 10,000+ patients and healthcare users
             </Badge>
 
             <h1 className="text-4xl md:text-5xl font-bold mb-4 text-balance">
@@ -174,7 +166,7 @@ export default function RegisterPage() {
             </h1>
 
             <p className="text-lg text-muted-foreground max-w-lg mx-auto text-pretty">
-              Start streamlining your healthcare authorizations with our
+              Start managing your healthcare authorizations and coverage with our
               AI-powered platform
             </p>
           </div>
@@ -201,7 +193,7 @@ export default function RegisterPage() {
                     htmlFor="firstName"
                     className="text-sm font-medium text-foreground"
                   >
-                    First Name
+                    First Name <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -223,7 +215,7 @@ export default function RegisterPage() {
                     htmlFor="lastName"
                     className="text-sm font-medium text-foreground"
                   >
-                    Last Name
+                    Last Name <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -247,7 +239,7 @@ export default function RegisterPage() {
                   htmlFor="email"
                   className="text-sm font-medium text-foreground"
                 >
-                  Email Address
+                  Email Address <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -271,8 +263,7 @@ export default function RegisterPage() {
                   htmlFor="phoneNumber"
                   className="text-sm font-medium text-foreground"
                 >
-                  Phone Number{" "}
-                  <span className="text-muted-foreground">(Optional)</span>
+                  Phone Number <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -280,6 +271,7 @@ export default function RegisterPage() {
                     id="phoneNumber"
                     name="phoneNumber"
                     type="tel"
+                    required
                     value={formData.phoneNumber}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground"
@@ -295,7 +287,7 @@ export default function RegisterPage() {
                 </label>
                 <div className="w-full px-4 py-3 bg-muted border border-border rounded-lg text-foreground text-sm flex items-center gap-2">
                   <span>Patient</span>
-                  <span className="text-muted-foreground text-xs ml-1">(self-registration is for patients only)</span>
+                  <span className="text-muted-foreground text-xs ml-1">(self-registration assigns Patient role)</span>
                 </div>
                 <input type="hidden" name="role" value="PATIENT" />
               </div>
@@ -321,7 +313,7 @@ export default function RegisterPage() {
                     htmlFor="password"
                     className="text-sm font-medium text-foreground"
                   >
-                    Password
+                    Password <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -333,7 +325,7 @@ export default function RegisterPage() {
                       value={formData.password}
                       onChange={handleChange}
                       className="w-full pl-10 pr-12 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground"
-                      placeholder="Create a strong password"
+                      placeholder="Create password"
                     />
                     <button
                       type="button"
@@ -347,32 +339,6 @@ export default function RegisterPage() {
                       )}
                     </button>
                   </div>
-                  {formData.password && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Password strength
-                        </span>
-                        <span
-                          className={`font-medium ${
-                            passwordStrength <= 2
-                              ? "text-destructive"
-                              : passwordStrength <= 3
-                              ? "text-accent"
-                              : "text-primary"
-                          }`}
-                        >
-                          {getPasswordStrengthText()}
-                        </span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-1.5">
-                        <div
-                          className={`h-1.5 rounded-full transition-all duration-300 ${getPasswordStrengthColor()}`}
-                          style={{ width: `${(passwordStrength / 5) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -380,7 +346,7 @@ export default function RegisterPage() {
                     htmlFor="confirmPassword"
                     className="text-sm font-medium text-foreground"
                   >
-                    Confirm Password
+                    Confirm Password <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -392,7 +358,7 @@ export default function RegisterPage() {
                       value={formData.confirmPassword}
                       onChange={handleChange}
                       className="w-full pl-10 pr-12 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground"
-                      placeholder="Confirm your password"
+                      placeholder="Confirm password"
                     />
                     <button
                       type="button"
@@ -410,6 +376,65 @@ export default function RegisterPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Password Policy Requirements Checklist */}
+              {formData.password.length > 0 && (
+                <div className="p-3 bg-muted/50 rounded-lg border border-border/60 text-xs space-y-1.5">
+                  <p className="font-semibold text-foreground mb-1">Password Policy Requirements:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      {passwordCriteria.minChar ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <span className={passwordCriteria.minChar ? "text-foreground" : "text-muted-foreground"}>
+                        At least 8 characters
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {passwordCriteria.hasUpper ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <span className={passwordCriteria.hasUpper ? "text-foreground" : "text-muted-foreground"}>
+                        At least 1 uppercase letter (A-Z)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {passwordCriteria.hasLower ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <span className={passwordCriteria.hasLower ? "text-foreground" : "text-muted-foreground"}>
+                        At least 1 lowercase letter (a-z)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {passwordCriteria.hasNumber ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <span className={passwordCriteria.hasNumber ? "text-foreground" : "text-muted-foreground"}>
+                        At least 1 number (0-9)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 sm:col-span-2">
+                      {passwordCriteria.passwordsMatch ? (
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <span className={passwordCriteria.passwordsMatch ? "text-foreground" : "text-muted-foreground"}>
+                        Passwords match exactly
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <Button

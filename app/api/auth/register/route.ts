@@ -2,21 +2,50 @@ import { NextRequest, NextResponse } from "next/server";
 import { registerUser } from "@/lib/auth";
 import { UserRole } from "@/lib/enums/UserRole";
 import { prisma } from "@/lib/prisma";
+import { validatePasswordPolicy, isValidEmail } from "@/lib/password-policy";
 
 /**
  * POST /api/auth/register
  * Self-registration is for PATIENT accounts only.
- * Hospital/HMO staff accounts are created via invite acceptance (/api/invite/[token]/accept).
- * Org admins register via /api/org/signup.
+ * Required fields: firstName, lastName, email, phoneNumber, password, confirmPassword.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, firstName, lastName, phoneNumber } = body;
+    const { email, password, confirmPassword, firstName, lastName, phoneNumber } = body;
 
-    if (!email || !password || !firstName || !lastName) {
+    // 1. Validate required fields
+    if (!firstName || !lastName || !email || !phoneNumber || !password || !confirmPassword) {
       return NextResponse.json(
-        { message: "Missing required registration fields" },
+        { message: "Missing required registration fields. First name, last name, email, phone number, password, and password confirmation are required." },
+        { status: 400 }
+      );
+    }
+
+    // 2. Validate email format
+    if (!isValidEmail(email)) {
+      return NextResponse.json(
+        { message: "Invalid email address format." },
+        { status: 400 }
+      );
+    }
+
+    // 3. Validate password confirmation match
+    if (password !== confirmPassword) {
+      return NextResponse.json(
+        { message: "Password confirmation does not match." },
+        { status: 400 }
+      );
+    }
+
+    // 4. Validate password policy (v2.0)
+    const passwordValidation = validatePasswordPolicy(password);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json(
+        { 
+          message: passwordValidation.errors.join(" "),
+          errors: passwordValidation.errors,
+        },
         { status: 400 }
       );
     }
@@ -24,21 +53,22 @@ export async function POST(req: NextRequest) {
     // Self-registration is patient-only
     const validRole = UserRole.PATIENT;
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    // 5. Prevent duplicate email registration
+    const existingUser = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (existingUser) {
       return NextResponse.json(
-        { message: "A user with this email address already exists" },
+        { message: "A user with this email address already exists." },
         { status: 409 }
       );
     }
 
+    // 6. Securely hash password and create user with PATIENT role
     const user = await registerUser({
-      email,
+      email: email.trim().toLowerCase(),
       password,
-      firstName,
-      lastName,
-      phoneNumber,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phoneNumber: phoneNumber.trim(),
       role: validRole,
     });
 
@@ -111,3 +141,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message }, { status: 500 });
   }
 }
+

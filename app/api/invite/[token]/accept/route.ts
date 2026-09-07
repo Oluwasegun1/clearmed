@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { registerUser } from "@/lib/auth";
+import { validatePasswordPolicy } from "@/lib/password-policy";
 
 export async function POST(
   req: NextRequest,
@@ -24,6 +25,14 @@ export async function POST(
     const { firstName, lastName, password, phoneNumber } = await req.json();
     if (!firstName || !lastName || !password) {
       return NextResponse.json({ error: "firstName, lastName, and password are required" }, { status: 400 });
+    }
+
+    const passwordValidation = validatePasswordPolicy(password);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json(
+        { error: passwordValidation.errors.join(" ") },
+        { status: 400 }
+      );
     }
 
     const existing = await prisma.user.findUnique({ where: { email: invite.email } });

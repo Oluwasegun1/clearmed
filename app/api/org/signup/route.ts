@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { registerUser } from "@/lib/auth";
 import { DEFAULT_HOSPITAL_ROLES, DEFAULT_HMO_ROLES } from "@/lib/permissions";
+import { validatePasswordPolicy } from "@/lib/password-policy";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,6 +35,15 @@ export async function POST(req: NextRequest) {
 
     if (orgType !== "HOSPITAL" && orgType !== "HMO") {
       return NextResponse.json({ error: "orgType must be HOSPITAL or HMO" }, { status: 400 });
+    }
+
+    // Validate Password Policy v2.0
+    const passwordValidation = validatePasswordPolicy(adminPassword);
+    if (!passwordValidation.isValid) {
+      return NextResponse.json(
+        { error: passwordValidation.errors.join(" ") },
+        { status: 400 }
+      );
     }
 
     // Check for duplicate admin email

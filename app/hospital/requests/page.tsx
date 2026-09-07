@@ -2,24 +2,30 @@
 
 /**
  * Hospital Requests Page — View & manage all pre-auth requests sent to or created by this hospital.
- * Live data from /api/hospital/requests.
+ * Refactored using standardized reusable components (DataTable, SearchFilterBar, StatusBadge, Dialog).
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { HospitalSidebarWrapper } from "@/components/sidebars";
-import { UserRole } from "@/lib/enums/UserRole";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  ClipboardList, Search, RefreshCw, Loader2, AlertCircle,
-  CheckCircle2, Clock, XCircle, FileText, User, Building2, Plus,
-  ShieldCheck, Eye, Copy, Check,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  SearchFilterBar,
+  DataTable,
+  StatusBadge,
+  Column,
+} from "@/components/shared";
+import {
+  ClipboardList, RefreshCw, AlertCircle, Plus, Eye, Copy, Check, Building2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -85,27 +91,91 @@ export default function HospitalRequestsPage() {
     );
   });
 
-  const statusBadge = (status: string) => {
-    switch (status) {
-      case "APPROVED":
-      case "AUTO_APPROVED":
-        return <Badge className="bg-green-500/10 text-green-600 border-green-500/30 gap-1"><CheckCircle2 className="h-3 w-3" /> Approved</Badge>;
-      case "PENDING":
-        return <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30 gap-1"><Clock className="h-3 w-3" /> Pending Review</Badge>;
-      case "REJECTED":
-        return <Badge className="bg-red-500/10 text-red-600 border-red-500/30 gap-1"><XCircle className="h-3 w-3" /> Rejected</Badge>;
-      case "COMPLETED":
-        return <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/30 gap-1"><ShieldCheck className="h-3 w-3" /> Delivered</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
   const copyCode = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
+
+  const columns: Column<RequestItem>[] = [
+    {
+      header: "Patient & Auth Code",
+      cell: (req) => (
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm shrink-0">
+            {req.patientName.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-foreground">{req.patientName}</span>
+              {req.authCode && (
+                <code className="text-[11px] bg-muted px-1.5 py-0.5 rounded font-mono text-primary font-semibold">
+                  #{req.authCode}
+                </code>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+              <Building2 className="h-3 w-3 inline" /> {req.hmoName} • {req.planName}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: "Service Requested",
+      cell: (req) => (
+        <div>
+          <p className="font-medium text-foreground text-sm">{req.serviceName}</p>
+          <p className="text-xs text-muted-foreground">{req.category}</p>
+        </div>
+      ),
+    },
+    {
+      header: "Amount",
+      cell: (req) => (
+        <span className="font-semibold text-foreground">
+          ₦{req.price ? req.price.toLocaleString() : "0"}
+        </span>
+      ),
+    },
+    {
+      header: "Status",
+      cell: (req) => <StatusBadge status={req.status} />,
+    },
+    {
+      header: "Date",
+      cell: (req) => (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {new Date(req.requestDate).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })}
+        </span>
+      ),
+    },
+    {
+      header: "Action",
+      className: "text-right",
+      cell: (req) => (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSelectedReq(req)}
+          className="gap-1.5 text-xs h-8"
+        >
+          <Eye className="h-3.5 w-3.5" /> Details
+        </Button>
+      ),
+    },
+  ];
+
+  const statusOptions = [
+    { label: "All", value: "ALL" },
+    { label: "Pending", value: "PENDING" },
+    { label: "Approved", value: "APPROVED" },
+    { label: "Rejected", value: "REJECTED" },
+  ];
 
   return (
     <HospitalSidebarWrapper currentPath="/hospital/requests">
@@ -135,33 +205,19 @@ export default function HospitalRequestsPage() {
         </div>
 
         <div className="relative p-6 max-w-7xl mx-auto space-y-6">
-
-          {/* Filters & Search */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-              {["ALL", "PENDING", "APPROVED", "REJECTED"].map((tab) => (
-                <Button
-                  key={tab}
-                  variant={statusTab === tab ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusTab(tab)}
-                  className="capitalize text-xs"
-                >
-                  {tab === "ALL" ? "All Requests" : tab.toLowerCase()}
-                </Button>
-              ))}
-            </div>
-
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search patient, service, HMO..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 text-sm"
-              />
-            </div>
-          </div>
+          {/* Search & Filter Bar */}
+          <SearchFilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search patient, service, HMO, code..."
+            statusFilter={statusTab}
+            onStatusFilterChange={setStatusTab}
+            statusOptions={statusOptions}
+            onResetFilters={() => {
+              setSearch("");
+              setStatusTab("ALL");
+            }}
+          />
 
           {error && (
             <Alert variant="destructive">
@@ -171,110 +227,40 @@ export default function HospitalRequestsPage() {
             </Alert>
           )}
 
-          {/* Requests Table / Cards */}
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <Card className="data-visualization">
-              <CardContent className="p-12 text-center space-y-3">
-                <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto" />
-                <h3 className="text-lg font-semibold">No requests found</h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  {search
-                    ? "No requests matching your search query."
-                    : "No authorization requests have been submitted for this hospital yet."}
-                </p>
-                <Link href="/hospital/request/new">
-                  <Button className="mt-2 gap-2"><Plus className="h-4 w-4" /> Create First Request</Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {filtered.map((req) => (
-                <Card key={req.id} className="data-visualization hover:border-primary/40 transition-all">
-                  <CardContent className="p-5">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      {/* Left: Patient & Service */}
-                      <div className="flex items-start gap-4">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold shrink-0 mt-0.5">
-                          {req.patientName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-semibold text-foreground text-base">{req.patientName}</h3>
-                            {statusBadge(req.status)}
-                            {req.authCode && (
-                              <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono text-primary font-semibold">
-                                #{req.authCode}
-                              </code>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground flex items-center gap-3 flex-wrap">
-                            <span className="font-medium text-foreground">{req.serviceName}</span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {req.hmoName}</span>
-                            <span>•</span>
-                            <span>Plan: {req.planName}</span>
-                          </p>
-                          {req.diagnosisNotes && (
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              Diagnosis/Notes: {req.diagnosisNotes}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+          {/* Reusable Data Table */}
+          <DataTable
+            columns={columns}
+            data={filtered}
+            isLoading={loading}
+            emptyTitle="No authorization requests found"
+            emptyDescription={
+              search
+                ? "No requests matching your search query."
+                : "No authorization requests have been submitted for this hospital yet."
+            }
+            emptyActionLabel="Create Request"
+            onEmptyAction={() => {
+              window.location.href = "/hospital/request/new";
+            }}
+          />
 
-                      {/* Right: Date, Cost & Action */}
-                      <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 pt-3 md:pt-0 border-border/50">
-                        <div className="text-left md:text-right">
-                          <p className="text-base font-bold text-foreground">
-                            ₦{req.price ? req.price.toLocaleString() : "0"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(req.requestDate).toLocaleDateString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedReq(req)}
-                          className="gap-1.5"
-                        >
-                          <Eye className="h-4 w-4" /> Details
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Details Modal Drawer */}
+          {/* Details Dialog using Radix Dialog */}
           {selectedReq && (
-            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-              <Card className="w-full max-w-xl data-visualization max-h-[90vh] overflow-y-auto">
-                <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-                  <div>
-                    <CardTitle className="text-lg">Authorization Request Details</CardTitle>
-                    <CardDescription>Request ID: {selectedReq.id}</CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedReq(null)}>✕</Button>
-                </CardHeader>
-                <CardContent className="p-6 space-y-6">
+            <Dialog open={Boolean(selectedReq)} onOpenChange={(open) => !open && setSelectedReq(null)}>
+              <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-lg">Authorization Request Details</DialogTitle>
+                  <DialogDescription>Request ID: {selectedReq.id}</DialogDescription>
+                </DialogHeader>
 
+                <div className="space-y-6 py-2">
                   {/* Status Banner */}
-                  <div className="flex items-center justify-between bg-muted/50 p-4 rounded-xl border">
+                  <div className="flex items-center justify-between bg-muted/50 p-4 rounded-xl border border-border">
                     <div>
                       <p className="text-xs text-muted-foreground">Current Status</p>
-                      <div className="mt-1">{statusBadge(selectedReq.status)}</div>
+                      <div className="mt-1">
+                        <StatusBadge status={selectedReq.status} />
+                      </div>
                     </div>
                     {selectedReq.authCode && (
                       <div className="text-right">
@@ -292,7 +278,7 @@ export default function HospitalRequestsPage() {
                   {/* Patient Info */}
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Patient & HMO Info</h4>
-                    <div className="grid grid-cols-2 gap-3 text-sm bg-card p-3 rounded-lg border">
+                    <div className="grid grid-cols-2 gap-3 text-sm bg-card p-3 rounded-lg border border-border">
                       <div>
                         <p className="text-muted-foreground text-xs">Patient Name</p>
                         <p className="font-medium">{selectedReq.patientName}</p>
@@ -315,8 +301,8 @@ export default function HospitalRequestsPage() {
                   {/* Requested Service & Diagnosis */}
                   <div className="space-y-2">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Medical Service Requested</h4>
-                    <div className="bg-card p-4 rounded-lg border space-y-3 text-sm">
-                      <div className="flex justify-between items-center border-b pb-2">
+                    <div className="bg-card p-4 rounded-lg border border-border space-y-3 text-sm">
+                      <div className="flex justify-between items-center border-b border-border pb-2">
                         <div>
                           <p className="font-semibold text-foreground">{selectedReq.serviceName}</p>
                           <p className="text-xs text-muted-foreground">Category: {selectedReq.category}</p>
@@ -334,20 +320,19 @@ export default function HospitalRequestsPage() {
                   {selectedReq.reviewComments && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">HMO Review Notes</h4>
-                      <div className="bg-muted p-3 rounded-lg border text-sm text-foreground">
+                      <div className="bg-muted p-3 rounded-lg border border-border text-sm text-foreground">
                         {selectedReq.reviewComments}
                       </div>
                     </div>
                   )}
+                </div>
 
-                  <div className="flex justify-end pt-2">
-                    <Button variant="outline" onClick={() => setSelectedReq(null)}>Close</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setSelectedReq(null)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           )}
-
         </div>
       </div>
     </HospitalSidebarWrapper>

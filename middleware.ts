@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { authSecret } from "@/lib/auth-config";
+import { checkRateLimit, getClientIp, createRateLimitResponse } from "@/lib/rate-limit";
 
 export async function middleware(request: NextRequest) {
-  const token = await getToken({ req: request, secret: authSecret });
   const { pathname } = request.nextUrl;
+  const ip = getClientIp(request);
+
+  // 1. Rate Limiting on API endpoints
+  if (pathname.startsWith("/api")) {
+    const isAuthApi = pathname.startsWith("/api/auth");
+    const rateLimit = checkRateLimit(ip, {
+      maxRequests: isAuthApi ? 10 : 100, // 10 req/min for auth, 100 req/min for public API
+      windowMs: 60000,
+      keyPrefix: isAuthApi ? "auth-api" : "pub-api",
+    });
+
+    if (!rateLimit.isAllowed) {
+      return createRateLimitResponse(rateLimit.limit, rateLimit.resetTimeMs);
+    }
+  }
+
+  const token = await getToken({ req: request, secret: authSecret });
 
   // Public routes accessible without authentication
   const publicRoutes = [
@@ -31,6 +48,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
   }
 
+  // 2. MFA Enforcement: Non-patient roles must complete MFA before accessing protected routes
+  if (token) {
+    const mfaRequired = Boolean(token.mfaRequired);
+    const mfaVerified = Boolean(token.mfaVerified);
+
+    if (mfaRequired && !mfaVerified && isProtectedRoute && !pathname.startsWith("/auth/mfa")) {
+      return NextResponse.redirect(new URL("/auth/mfa", request.url));
+    }
+  }
+
   // Authenticated user on home: redirect to role-specific dashboard
   if (token && pathname === "/") {
     const role = token.role as string;
@@ -53,10 +80,9 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Allow /auth/login when authenticated so user can sign out and sign in as another role.
-  // Other auth pages (register, forgot-password): redirect to role dashboard.
+  // Allow /auth/login and /auth/mfa when authenticated so user can complete MFA or sign out
   if (token && isPublicRoute && !pathname.startsWith("/sidebar-demo") && pathname !== "/") {
-    if (pathname.startsWith("/auth/login")) {
+    if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/mfa")) {
       return NextResponse.next();
     }
     const role = token.role as string;
@@ -112,5 +138,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
+

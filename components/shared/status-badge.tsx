@@ -1,7 +1,9 @@
 "use client";
 
+import type React from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { CheckCircle2, Clock, XCircle, ShieldCheck, AlertCircle, Check, Ban } from "lucide-react";
 
 export type StatusType =
   | "approved"
@@ -14,36 +16,85 @@ export type StatusType =
   | "success"
   | "info"
   | "active"
-  | "inactive";
+  | "inactive"
+  | "completed"
+  | "accepted"
+  | string;
 
 interface StatusBadgeProps {
-  status: StatusType | string;
+  status: StatusType;
+  showIcon?: boolean;
   className?: string;
 }
 
-const statusStyles: Record<string, string> = {
-  approved: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-  auto_approved: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-  success: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-  active: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-  
-  pending: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
-  warning: "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/20",
-  
-  denied: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
-  rejected: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
-  expired: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
-  inactive: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
-  
-  info: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20",
+const statusConfig: Record<
+  string,
+  { style: string; icon: React.ElementType }
+> = {
+  approved: {
+    style: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    icon: CheckCircle2,
+  },
+  auto_approved: {
+    style: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    icon: ShieldCheck,
+  },
+  success: {
+    style: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    icon: CheckCircle2,
+  },
+  active: {
+    style: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    icon: Check,
+  },
+  accepted: {
+    style: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    icon: Check,
+  },
+  completed: {
+    style: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    icon: ShieldCheck,
+  },
+  pending: {
+    style: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    icon: Clock,
+  },
+  warning: {
+    style: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+    icon: AlertCircle,
+  },
+  denied: {
+    style: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+    icon: XCircle,
+  },
+  rejected: {
+    style: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+    icon: XCircle,
+  },
+  expired: {
+    style: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/20",
+    icon: Clock,
+  },
+  inactive: {
+    style: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+    icon: Ban,
+  },
+  info: {
+    style: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
+    icon: AlertCircle,
+  },
 };
 
-export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const normalizedStatus = status.toLowerCase().replace(/[\s_-]+/g, "_");
-  const baseStyle = statusStyles[normalizedStatus] || "bg-muted text-muted-foreground border-border/50";
-  
-  // Pretty format for display
-  const displayLabel = status
+export function StatusBadge({ status, showIcon = true, className }: StatusBadgeProps) {
+  const normalizedKey = (status || "").toString().toLowerCase().replace(/[\s_-]+/g, "_");
+  const config = statusConfig[normalizedKey] || {
+    style: "bg-muted text-muted-foreground border-border/50",
+    icon: AlertCircle,
+  };
+  const IconComponent = config.icon;
+
+  const displayLabel = (status || "")
+    .toString()
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
@@ -51,12 +102,13 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     <Badge
       variant="outline"
       className={cn(
-        "font-semibold text-xs tracking-wide px-2.5 py-0.5 rounded-full border transition-colors shrink-0",
-        baseStyle,
+        "font-semibold text-xs tracking-wide px-2.5 py-0.5 rounded-full border transition-colors shrink-0 inline-flex items-center gap-1.5",
+        config.style,
         className
       )}
     >
-      {displayLabel}
+      {showIcon && <IconComponent className="w-3.5 h-3.5 shrink-0" />}
+      <span>{displayLabel}</span>
     </Badge>
   );
 }

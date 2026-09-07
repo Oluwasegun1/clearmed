@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Building2, Shield, ArrowLeft, ArrowRight, Loader2,
-  AlertCircle, CheckCircle2, MapPin, Phone, Mail, Hash, User, Lock,
+  AlertCircle, CheckCircle2, XCircle, MapPin, Phone, Mail, Hash, User, Lock,
 } from "lucide-react";
 
 type OrgType = "HOSPITAL" | "HMO";
@@ -52,6 +52,14 @@ export default function OrgSignupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  const passwordCriteria = {
+    minChar: form.adminPassword.length >= 8,
+    hasUpper: /[A-Z]/.test(form.adminPassword),
+    hasLower: /[a-z]/.test(form.adminPassword),
+    hasNumber: /[0-9]/.test(form.adminPassword),
+    passwordsMatch: form.adminPassword.length > 0 && form.adminPassword === form.confirmPassword,
+  };
 
   const set = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -286,6 +294,70 @@ export default function OrgSignupPage() {
                         onChange={set("confirmPassword")} placeholder="Re-enter password" required />
                     </div>
                   </div>
+
+                  {/* Password Policy Requirements Checklist */}
+                  {form.adminPassword.length > 0 && (
+                    <div className="p-3 bg-muted/50 rounded-lg border border-border/60 text-xs space-y-1.5 mt-3">
+                      <p className="font-semibold text-foreground mb-1">Password Policy Requirements:</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          {passwordCriteria.minChar ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className={passwordCriteria.minChar ? "text-foreground" : "text-muted-foreground"}>
+                            At least 8 characters
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {passwordCriteria.hasUpper ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className={passwordCriteria.hasUpper ? "text-foreground" : "text-muted-foreground"}>
+                            At least 1 uppercase letter (A-Z)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {passwordCriteria.hasLower ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className={passwordCriteria.hasLower ? "text-foreground" : "text-muted-foreground"}>
+                            At least 1 lowercase letter (a-z)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {passwordCriteria.hasNumber ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className={passwordCriteria.hasNumber ? "text-foreground" : "text-muted-foreground"}>
+                            At least 1 number (0-9)
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 sm:col-span-2">
+                          {passwordCriteria.passwordsMatch ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className={passwordCriteria.passwordsMatch ? "text-foreground" : "text-muted-foreground"}>
+                            Passwords match exactly
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* <div className="mt-4">
+                    <Button type="button" variant="secondary" className="w-full" onClick={handleInviteStaff}>
+                      <Plus className="mr-2 h-4 w-4" /> Invite Staff
+                    </Button>
+                  </div> */}
                 </CardContent>
               </Card>
 

@@ -38,6 +38,10 @@ model User {
   updatedAt         DateTime          @updatedAt
   isActive          Boolean           @default(true)
   lastLogin         DateTime?
+  failedLoginAttempts Int             @default(0)
+  lockedUntil       DateTime?
+  mfaEnabled        Boolean           @default(false)
+  mfaSecret         String?
   
   // Relations based on role
   patient           Patient?          // If role is PATIENT
@@ -328,6 +332,10 @@ enum AuditAction {
   DELETE
   LOGIN
   LOGOUT
+  LOGIN_FAILED
+  ACCOUNT_LOCKED
+  MFA_VERIFIED
+  MFA_FAILED
   AUTH_REQUEST
   AUTH_REVIEW
   SERVICE_DELIVERY

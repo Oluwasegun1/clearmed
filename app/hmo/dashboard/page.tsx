@@ -197,7 +197,10 @@ export default function HMODashboard() {
                 Last updated
               </p>
               <p className="text-sm font-semibold text-foreground mt-0.5">
-                {new Date().toLocaleDateString()}
+                {new Date().toLocaleDateString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </p>
             </div>
           }

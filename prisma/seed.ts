@@ -169,7 +169,7 @@ async function main() {
       row.role === "PHARMACY" ||
       row.role === "LAB"
     ) {
-      const staffId = `EMP-${row.role.slice(0, 2).toUpperCase()}-${user.id.slice(0, 6)}`;
+      const staffId = `EMP-${row.role.replace("_", "")}-${user.id.slice(-8).toUpperCase()}`;
       const position =
         row.role === "DOCTOR"
           ? "Consultant"
@@ -178,7 +178,7 @@ async function main() {
             : row.role;
       await prisma.hospitalStaff.upsert({
         where: { userId: user.id },
-        update: {},
+        update: { staffId, position },
         create: {
           userId: user.id,
           hospitalId: hospital.id,
@@ -191,15 +191,16 @@ async function main() {
     }
 
     if (row.role === "HMO_STAFF" || row.role === "HMO_ADMIN") {
-      const staffId = `HMO-${user.id.slice(0, 8).toUpperCase()}`;
+      const staffId = `HMO-${row.role.replace("_", "")}-${user.id.slice(-8).toUpperCase()}`;
+      const position = row.role === "HMO_ADMIN" ? "Admin" : "Reviewer";
       await prisma.hMOStaff.upsert({
         where: { userId: user.id },
-        update: {},
+        update: { staffId, position },
         create: {
           userId: user.id,
           hmoId: hmo.id,
           staffId,
-          position: row.role === "HMO_ADMIN" ? "Admin" : "Reviewer",
+          position,
         },
       });
     }
