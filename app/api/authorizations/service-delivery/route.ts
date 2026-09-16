@@ -34,12 +34,12 @@ export async function POST(request: NextRequest) {
 
     // Parse the request body
     const body = await request.json();
-    const { authorizationCode, serviceId } = body;
+    const { authorizationCode, serviceId, actualQuantity, actualCost } = body;
 
     // Validate required fields
-    if (!authorizationCode || !serviceId) {
+    if (!authorizationCode) {
       return NextResponse.json(
-        { message: "Authorization code and service ID are required" },
+        { message: "Authorization code is required" },
         { status: 400 },
       );
     }
@@ -47,8 +47,10 @@ export async function POST(request: NextRequest) {
     // Record the service delivery
     const serviceDelivery = await authService.recordServiceDelivery(
       authorizationCode,
-      serviceId,
+      serviceId || undefined,
       session.user.id,
+      actualQuantity ? Number(actualQuantity) : 1,
+      actualCost ? Number(actualCost) : undefined,
     );
 
     return NextResponse.json(serviceDelivery, { status: 201 });

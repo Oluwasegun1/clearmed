@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
       services,
       notes,
       quantity,
+      items,
     } = body;
 
     let targetPatientId = patientId;
-    let targetServiceId = serviceId;
 
     if (!hospitalId) {
       return NextResponse.json(
@@ -48,22 +48,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Auto-resolve serviceId if not explicitly provided
-    if (!targetServiceId) {
-      const defaultService = await prisma.service.findFirst();
-      if (defaultService) {
-        targetServiceId = defaultService.id;
-      } else {
-        const newService = await prisma.service.create({
-          data: {
-            name: "General Consultation & Service",
-            category: "Consultation",
-            code: "CONS-GENERAL",
-            standardPrice: 5000,
-          },
-        });
-        targetServiceId = newService.id;
-      }
+    if (!targetPatientId) {
+      return NextResponse.json(
+        { message: "Patient selection is required" },
+        { status: 400 }
+      );
     }
 
     // Map diagnosis & services text from patient form
@@ -103,9 +92,10 @@ export async function POST(request: NextRequest) {
       dependentId,
       hospitalId,
       requestedById: staff.id,
-      serviceId: targetServiceId,
       diagnosisCode: diagnosisCode || "GENERAL",
-      diagnosisNotes: combinedNotes || "General Request",
+      diagnosisNotes: combinedNotes || "Medical Authorization Request",
+      items: Array.isArray(items) && items.length > 0 ? items : undefined,
+      serviceId: serviceId || undefined,
       quantity: quantity ? Number(quantity) : 1,
     });
 
@@ -138,18 +128,16 @@ export async function GET(request: NextRequest) {
     if (statusFilter && statusFilter.toUpperCase() !== "ALL") {
       const upper = statusFilter.toUpperCase();
       if (upper === "APPROVED") {
-        // Include both manual and auto-approved
         where.status = { in: ["APPROVED", "AUTO_APPROVED"] };
       } else if (upper === "COMPLETED") {
-        // "Completed" = approved requests that have had a service delivery recorded
-        where.status = { in: ["APPROVED", "AUTO_APPROVED"] };
-        where.serviceDelivery = { isNot: null };
+        where.status = "COMPLETED" as AuthStatus;
       } else if (upper === "PENDING") {
         where.status = "PENDING" as AuthStatus;
       } else if (upper === "REJECTED") {
         where.status = "REJECTED" as AuthStatus;
+      } else if (upper === "MORE_INFORMATION_REQUIRED") {
+        where.status = "MORE_INFORMATION_REQUIRED" as AuthStatus;
       }
-      // "ALL" and unknown values fall through with no status filter
     }
 
     if (patientIdFilter) where.patientId = patientIdFilter;
@@ -205,6 +193,7 @@ export async function GET(request: NextRequest) {
                 firstName: true,
                 lastName: true,
                 email: true,
+                phoneNumber: true,
               },
             },
             coveragePlan: true,
@@ -212,6 +201,26 @@ export async function GET(request: NextRequest) {
         },
         hospital: true,
         service: true,
+        items: {
+          include: {
+            service: true,
+            reviewer: {
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true },
+                },
+              },
+            },
+            fulfilledBy: {
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
         requestedBy: {
           include: {
             user: true,
@@ -221,7 +230,6 @@ export async function GET(request: NextRequest) {
           orderBy: {
             reviewDate: "desc",
           },
-          take: 1,
         },
         serviceDelivery: true,
       },
@@ -230,34 +238,111 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Transform to the shape the frontend AuthRequest interface expects
-    const transformed = authRequests.map((r) => ({
-      id: r.id,
-      status: r.serviceDelivery ? "COMPLETED" : r.status,
-      createdAt: r.requestDate.toISOString(),
-      authorizationCode: r.authCode ?? "",
-      patient: {
-        user: {
-          name: r.patient?.user
-            ? `${r.patient.user.firstName} ${r.patient.user.lastName}`.trim()
-            : "Unknown",
+    // Transform to shape expected by frontend (with v2.0 itemized services)
+    const transformed = authRequests.map((r) => {
+      // Build itemized services array
+      const itemsList =
+        r.items && r.items.length > 0
+          ? r.items.map((it) => ({
+              id: it.id,
+              serviceId: it.serviceId,
+              name: it.description,
+              category: it.category,
+              cost: it.cost,
+              quantity: it.quantity,
+              reason: it.reason,
+              status: it.status,
+              decisionReason: it.decisionReason,
+              reviewedAt: it.reviewedAt?.toISOString() || null,
+              reviewerName: it.reviewer?.user
+                ? `${it.reviewer.user.firstName} ${it.reviewer.user.lastName}`
+                : null,
+              fulfilledAt: it.fulfilledAt?.toISOString() || null,
+              fulfilledByName: it.fulfilledBy?.user
+                ? `${it.fulfilledBy.user.firstName} ${it.fulfilledBy.user.lastName}`
+                : null,
+            }))
+          : r.service
+          ? [
+              {
+                id: r.service.id,
+                serviceId: r.service.id,
+                name: r.service.name,
+                category: r.service.category,
+                cost: r.service.standardPrice ?? 0,
+                quantity: r.quantity,
+                reason: r.diagnosisNotes,
+                status: r.serviceDelivery ? "COMPLETED" : r.status,
+                decisionReason: r.reviews[0]?.comments || null,
+                reviewedAt: r.reviews[0]?.reviewDate?.toISOString() || null,
+                reviewerName: null,
+                fulfilledAt: null,
+                fulfilledByName: null,
+              },
+            ]
+          : [];
+
+      const itemStatuses = itemsList.map((it) => it.status);
+      let derivedStatus = r.status as string;
+      if (itemStatuses.length > 1) {
+        const hasApproved = itemStatuses.some((s) =>
+          ["APPROVED", "AUTO_APPROVED", "COMPLETED"].includes(s)
+        );
+        const hasRejected = itemStatuses.some((s) => s === "REJECTED");
+        const hasPending = itemStatuses.some((s) => s === "PENDING");
+        if (hasApproved && hasRejected && !hasPending) {
+          derivedStatus = "PARTIALLY_APPROVED";
+        }
+      }
+
+      return {
+        id: r.id,
+        status: derivedStatus,
+        createdAt: r.requestDate.toISOString(),
+        authorizationCode: r.authCode ?? "",
+        authCode: r.authCode ?? "",
+        patient: {
+          id: r.patient?.id,
+          membershipNumber: r.patient?.membershipNumber,
+          coveragePlan: r.patient?.coveragePlan,
+          user: {
+            firstName: r.patient?.user?.firstName || "",
+            lastName: r.patient?.user?.lastName || "",
+            name: r.patient?.user
+              ? `${r.patient.user.firstName} ${r.patient.user.lastName}`.trim()
+              : "Unknown",
+            email: r.patient?.user?.email || "",
+            phoneNumber: r.patient?.user?.phoneNumber || "",
+          },
         },
-      },
-      hospital: {
-        name: r.hospital?.name ?? "Unknown Hospital",
-      },
-      diagnosis: r.diagnosisNotes ?? r.diagnosisCode ?? "",
-      services: r.service
-        ? [
-            {
-              id: r.service.id,
-              name: r.service.name,
-              cost: r.service.standardPrice ?? 0,
-            },
-          ]
-        : [],
-      reviewedAt: r.reviews[0]?.reviewDate?.toISOString() ?? null,
-    }));
+        hospital: {
+          id: r.hospital?.id,
+          name: r.hospital?.name ?? "Unknown Hospital",
+          city: r.hospital?.city,
+          state: r.hospital?.state,
+        },
+        diagnosis: r.diagnosisNotes ?? r.diagnosisCode ?? "",
+        diagnosisCode: r.diagnosisCode ?? "",
+        diagnosisNotes: r.diagnosisNotes ?? "",
+        quantity: r.quantity,
+        services: itemsList,
+        items: itemsList,
+        requestedBy: {
+          position: r.requestedBy?.position,
+          user: {
+            firstName: r.requestedBy?.user?.firstName || "",
+            lastName: r.requestedBy?.user?.lastName || "",
+          },
+        },
+        reviews: r.reviews.map((rev) => ({
+          id: rev.id,
+          decision: rev.decision,
+          comments: rev.comments,
+          reviewDate: rev.reviewDate.toISOString(),
+        })),
+        reviewedAt: r.reviews[0]?.reviewDate?.toISOString() ?? null,
+      };
+    });
 
     return NextResponse.json(transformed);
   } catch (error: unknown) {

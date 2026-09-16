@@ -9,11 +9,21 @@ export async function middleware(request: NextRequest) {
 
   // 1. Rate Limiting on API endpoints
   if (pathname.startsWith("/api")) {
-    const isAuthApi = pathname.startsWith("/api/auth");
+    // Credential submissions are the only real brute-force risk.
+    // NextAuth also hits /api/auth/session, /api/auth/csrf, /api/auth/signout, etc.
+    // on every page load and demo sign-in, so those get a much more generous limit.
+    const isCredentialLogin = pathname === "/api/auth/callback/credentials";
+    const isOtherAuthApi =
+      !isCredentialLogin && pathname.startsWith("/api/auth");
+
     const rateLimit = checkRateLimit(ip, {
-      maxRequests: isAuthApi ? 10 : 100, // 10 req/min for auth, 100 req/min for public API
+      maxRequests: isCredentialLogin ? 10 : isOtherAuthApi ? 60 : 100,
       windowMs: 60000,
-      keyPrefix: isAuthApi ? "auth-api" : "pub-api",
+      keyPrefix: isCredentialLogin
+        ? "auth-login"
+        : isOtherAuthApi
+          ? "auth-other"
+          : "pub-api",
     });
 
     if (!rateLimit.isAllowed) {

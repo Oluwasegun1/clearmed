@@ -133,6 +133,7 @@ model HospitalStaff {
   // Relations
   authRequests      AuthorizationRequest[]  // Requests created by this staff
   serviceDeliveries ServiceDelivery[]      // Services delivered by this staff
+  fulfilledItems    AuthorizationItem[]    // Items fulfilled by this staff
 }
 
 model HMO {
@@ -166,6 +167,7 @@ model HMOStaff {
   
   // Relations
   authReviews       AuthorizationReview[]
+  reviewedItems     AuthorizationItem[]
 }
 
 model CoveragePlan {
@@ -242,13 +244,16 @@ model Service {
   contractServices  ContractService[]
   authRequests      AuthorizationRequest[]
   serviceDeliveries ServiceDelivery[]
+  authItems         AuthorizationItem[]
 }
 
 enum AuthStatus {
   PENDING
+  MORE_INFORMATION_REQUIRED
   AUTO_APPROVED
   APPROVED
   REJECTED
+  COMPLETED
   CANCELLED
   EXPIRED
 }
@@ -263,8 +268,8 @@ model AuthorizationRequest {
   hospital          Hospital          @relation(fields: [hospitalId], references: [id])
   requestedById     String
   requestedBy       HospitalStaff     @relation(fields: [requestedById], references: [id])
-  serviceId         String
-  service           Service           @relation(fields: [serviceId], references: [id])
+  serviceId         String?
+  service           Service?          @relation(fields: [serviceId], references: [id])
   diagnosisCode     String?
   diagnosisNotes    String?
   quantity          Int               @default(1)
@@ -274,8 +279,35 @@ model AuthorizationRequest {
   expiryDate        DateTime?
   
   // Relations
+  items             AuthorizationItem[]
   reviews           AuthorizationReview[]
   serviceDelivery   ServiceDelivery?
+}
+
+model AuthorizationItem {
+  id                String            @id @default(cuid())
+  authRequestId     String
+  authRequest       AuthorizationRequest @relation(fields: [authRequestId], references: [id], onDelete: Cascade)
+  serviceId         String?
+  service           Service?          @relation(fields: [serviceId], references: [id])
+  description       String
+  category          String            @default("General") // Consultation, Pharmacy/Medication, Laboratory, Procedure
+  cost              Float             // Submitted price per service
+  reason            String?           // Clinical justification / reason per service
+  supportingDocs    String?           // JSON or string list of attachment URLs/names
+  quantity          Int               @default(1)
+  status            AuthStatus        @default(PENDING) // PENDING, APPROVED, REJECTED, MORE_INFORMATION_REQUIRED, COMPLETED, CANCELLED
+  reviewerId        String?
+  reviewer          HMOStaff?         @relation(fields: [reviewerId], references: [id])
+  reviewedAt        DateTime?
+  decisionReason    String?           // Reviewer comments / justification
+  fulfilledById     String?
+  fulfilledBy       HospitalStaff?    @relation(fields: [fulfilledById], references: [id])
+  fulfilledAt       DateTime?
+  fulfillmentNotes  String?
+  actualCost        Float?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 }
 
 model AuthorizationReview {

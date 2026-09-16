@@ -28,14 +28,24 @@ export async function GET(
       },
       include: {
         patient: {
-          select: {
-            id: true,
+          include: {
             user: {
               select: {
                 id: true,
                 firstName: true,
                 lastName: true,
                 email: true,
+                phoneNumber: true,
+              },
+            },
+            hmo: true,
+            coveragePlan: {
+              include: {
+                coverageRules: {
+                  include: {
+                    service: true,
+                  },
+                },
               },
             },
           },
@@ -47,9 +57,31 @@ export async function GET(
             address: true,
             city: true,
             state: true,
+            phoneNumber: true,
+            email: true,
           },
         },
         service: true,
+        items: {
+          include: {
+            service: true,
+            reviewer: {
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true },
+                },
+              },
+            },
+            fulfilledBy: {
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
         requestedBy: {
           select: {
             id: true,
@@ -71,7 +103,9 @@ export async function GET(
               },
             },
           },
+          orderBy: { reviewDate: "desc" },
         },
+        serviceDelivery: true,
       },
     });
 
@@ -92,7 +126,59 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(authorization);
+    // Fetch previous relevant authorizations for Section 18 review
+    let previousAuthorizations: Array<{
+      id: string;
+      authCode: string | null;
+      status: string;
+      requestDate: string;
+      hospitalName: string;
+      serviceSummary: string;
+      totalCost: number;
+    }> = [];
+
+    if (authorization.patientId) {
+      const prev = await prisma.authorizationRequest.findMany({
+        where: {
+          patientId: authorization.patientId,
+          id: { not: authorizationId },
+        },
+        include: {
+          hospital: { select: { name: true } },
+          service: true,
+          items: true,
+        },
+        orderBy: { requestDate: "desc" },
+        take: 5,
+      });
+
+      previousAuthorizations = prev.map((p) => {
+        const cost =
+          p.items && p.items.length > 0
+            ? p.items.reduce((s, it) => s + it.cost, 0)
+            : (p.service?.standardPrice || 5000) * p.quantity;
+
+        const summary =
+          p.items && p.items.length > 0
+            ? p.items.map((it) => it.description).join(", ")
+            : p.service?.name || "Medical Service";
+
+        return {
+          id: p.id,
+          authCode: p.authCode,
+          status: p.status,
+          requestDate: p.requestDate.toISOString(),
+          hospitalName: p.hospital?.name || "Hospital",
+          serviceSummary: summary,
+          totalCost: cost,
+        };
+      });
+    }
+
+    return NextResponse.json({
+      ...authorization,
+      previousAuthorizations,
+    });
   } catch (error) {
     console.error("Error fetching authorization:", error);
     return NextResponse.json(

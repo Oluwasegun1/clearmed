@@ -37,9 +37,9 @@ export async function POST(request: NextRequest) {
     const { authorizationCode, serviceId } = body;
 
     // Validate required fields
-    if (!authorizationCode || !serviceId) {
+    if (!authorizationCode) {
       return NextResponse.json(
-        { message: "Authorization code and service ID are required" },
+        { message: "Authorization code is required" },
         { status: 400 },
       );
     }

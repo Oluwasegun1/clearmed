@@ -63,14 +63,9 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
       title: "Requests",
       items: [
         {
-          title: "Pending Requests",
-          href: "/hmo/requests/pending",
+          title: "Authorization Requests",
+          href: "/hmo/requests",
           icon: <ClipboardCheck className="h-4 w-4" />,
-        },
-        {
-          title: "All Requests",
-          href: "/hmo/requests/all",
-          icon: <ClipboardList className="h-4 w-4" />,
         },
         {
           title: "Fraud Detection",
@@ -168,7 +163,11 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
                   key={item.href}
                   href={item.href}
                   icon={item.icon}
-                  isActive={currentPath === item.href}
+                  isActive={
+                    currentPath === item.href ||
+                    (item.href !== "/hmo/dashboard" &&
+                      currentPath?.startsWith(item.href))
+                  }
                 >
                   {item.title}
                 </SidebarNavItem>

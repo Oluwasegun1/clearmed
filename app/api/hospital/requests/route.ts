@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (!hospitalId) {
-      // Fallback: pick first hospital if dev/testing
       const fallbackHosp = await prisma.hospital.findFirst();
       hospitalId = fallbackHosp?.id ?? null;
     }
@@ -51,7 +50,7 @@ export async function GET(request: NextRequest) {
       const s = statusFilter.toUpperCase();
       if (s === "APPROVED") {
         where.status = { in: ["APPROVED", "AUTO_APPROVED"] };
-      } else if (s === "PENDING" || s === "REJECTED" || s === "CANCELLED" || s === "EXPIRED") {
+      } else if (s === "PENDING" || s === "REJECTED" || s === "CANCELLED" || s === "EXPIRED" || s === "COMPLETED" || s === "MORE_INFORMATION_REQUIRED") {
         where.status = s;
       }
     }
@@ -85,6 +84,22 @@ export async function GET(request: NextRequest) {
           select: { name: true },
         },
         service: true,
+        items: {
+          include: {
+            service: true,
+            reviewer: {
+              include: {
+                user: { select: { firstName: true, lastName: true } },
+              },
+            },
+            fulfilledBy: {
+              include: {
+                user: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
         requestedBy: {
           include: {
             user: { select: { firstName: true, lastName: true } },
@@ -92,39 +107,97 @@ export async function GET(request: NextRequest) {
         },
         reviews: {
           orderBy: { reviewDate: "desc" },
-          take: 1,
         },
         serviceDelivery: true,
       },
       orderBy: { requestDate: "desc" },
     });
 
-    const transformed = authRequests.map((r) => ({
-      id: r.id,
-      authCode: r.authCode ?? "",
-      status: r.serviceDelivery ? "COMPLETED" : r.status,
-      rawStatus: r.status,
-      requestDate: r.requestDate.toISOString(),
-      patientName: r.patient?.user
-        ? `${r.patient.user.firstName} ${r.patient.user.lastName}`.trim()
-        : "Direct Patient Request",
-      patientEmail: r.patient?.user?.email ?? "",
-      patientPhone: r.patient?.user?.phoneNumber ?? "",
-      hmoName: r.patient?.hmo?.name ?? "General HMO",
-      planName: r.patient?.coveragePlan?.name ?? "Standard Plan",
-      serviceName: r.service?.name ?? "General Consultation",
-      category: r.service?.category ?? "Consultation",
-      price: r.service?.standardPrice ?? 0,
-      diagnosisCode: r.diagnosisCode ?? "",
-      diagnosisNotes: r.diagnosisNotes ?? "",
-      quantity: r.quantity,
-      requestedByName: r.requestedBy?.user
-        ? `${r.requestedBy.user.firstName} ${r.requestedBy.user.lastName}`
-        : "Patient / Self",
-      reviewComments: r.reviews[0]?.comments ?? null,
-      reviewedAt: r.reviews[0]?.reviewDate?.toISOString() ?? null,
-      hasServiceDelivery: !!r.serviceDelivery,
-    }));
+    const transformed = authRequests.map((r) => {
+      const itemsList =
+        r.items && r.items.length > 0
+          ? r.items.map((it) => ({
+              id: it.id,
+              serviceId: it.serviceId,
+              name: it.description,
+              category: it.category,
+              cost: it.cost,
+              quantity: it.quantity,
+              reason: it.reason,
+              status: it.status,
+              decisionReason: it.decisionReason,
+              reviewedAt: it.reviewedAt?.toISOString() || null,
+              reviewerName: it.reviewer?.user
+                ? `${it.reviewer.user.firstName} ${it.reviewer.user.lastName}`
+                : null,
+              fulfilledAt: it.fulfilledAt?.toISOString() || null,
+              fulfilledByName: it.fulfilledBy?.user
+                ? `${it.fulfilledBy.user.firstName} ${it.fulfilledBy.user.lastName}`
+                : null,
+            }))
+          : r.service
+          ? [
+              {
+                id: r.service.id,
+                serviceId: r.service.id,
+                name: r.service.name,
+                category: r.service.category,
+                cost: r.service.standardPrice ?? 0,
+                quantity: r.quantity,
+                reason: r.diagnosisNotes,
+                status: r.serviceDelivery ? "COMPLETED" : r.status,
+                decisionReason: r.reviews[0]?.comments || null,
+                reviewedAt: r.reviews[0]?.reviewDate?.toISOString() || null,
+                reviewerName: null,
+                fulfilledAt: null,
+                fulfilledByName: null,
+              },
+            ]
+          : [];
+
+      const totalPrice = itemsList.reduce((acc, it) => acc + it.cost, 0) || (r.service?.standardPrice ?? 0);
+      const itemStatuses = itemsList.map((it) => it.status);
+      let derivedStatus = r.status as string;
+      if (itemStatuses.length > 1) {
+        const hasApproved = itemStatuses.some((s) =>
+          ["APPROVED", "AUTO_APPROVED", "COMPLETED"].includes(s)
+        );
+        const hasRejected = itemStatuses.some((s) => s === "REJECTED");
+        const hasPending = itemStatuses.some((s) => s === "PENDING");
+        if (hasApproved && hasRejected && !hasPending) {
+          derivedStatus = "PARTIALLY_APPROVED";
+        }
+      }
+
+      return {
+        id: r.id,
+        authCode: r.authCode ?? "",
+        status: derivedStatus,
+        rawStatus: r.status,
+        requestDate: r.requestDate.toISOString(),
+        patientName: r.patient?.user
+          ? `${r.patient.user.firstName} ${r.patient.user.lastName}`.trim()
+          : "Direct Patient Request",
+        patientEmail: r.patient?.user?.email ?? "",
+        patientPhone: r.patient?.user?.phoneNumber ?? "",
+        hmoName: r.patient?.hmo?.name ?? "General HMO",
+        planName: r.patient?.coveragePlan?.name ?? "Standard Plan",
+        serviceName: itemsList.length > 1 ? `${itemsList[0].name} +${itemsList.length - 1} more` : itemsList[0]?.name ?? r.service?.name ?? "General Consultation",
+        category: itemsList[0]?.category ?? r.service?.category ?? "Consultation",
+        price: totalPrice,
+        diagnosisCode: r.diagnosisCode ?? "",
+        diagnosisNotes: r.diagnosisNotes ?? "",
+        quantity: r.quantity,
+        items: itemsList,
+        services: itemsList,
+        requestedByName: r.requestedBy?.user
+          ? `${r.requestedBy.user.firstName} ${r.requestedBy.user.lastName}`
+          : "Patient / Self",
+        reviewComments: r.reviews[0]?.comments ?? null,
+        reviewedAt: r.reviews[0]?.reviewDate?.toISOString() ?? null,
+        hasServiceDelivery: !!r.serviceDelivery,
+      };
+    });
 
     return NextResponse.json(transformed);
   } catch (error: unknown) {

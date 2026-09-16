@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Hospital Requests Page — View & manage all pre-auth requests sent to or created by this hospital.
- * Refactored using standardized reusable components (DataTable, SearchFilterBar, StatusBadge, Dialog).
+ * Hospital Requests Page — View & manage all pre-auth requests sent to or created by this hospital (ClearMed v2.0).
+ * Step 8: Provider sees decision and status per service line item and as a derived overall request status.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -10,6 +10,7 @@ import { HospitalSidebarWrapper } from "@/components/sidebars";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -25,9 +26,35 @@ import {
   Column,
 } from "@/components/shared";
 import {
-  ClipboardList, RefreshCw, AlertCircle, Plus, Eye, Copy, Check, Building2,
+  ClipboardList,
+  RefreshCw,
+  AlertCircle,
+  Plus,
+  Eye,
+  Copy,
+  Check,
+  Building2,
+  Stethoscope,
+  DollarSign,
+  User,
+  Calendar,
 } from "lucide-react";
 import Link from "next/link";
+
+interface ServiceItemDetail {
+  id: string;
+  name: string;
+  category: string;
+  cost: number;
+  quantity: number;
+  reason?: string;
+  status: string;
+  decisionReason?: string | null;
+  reviewedAt?: string | null;
+  reviewerName?: string | null;
+  fulfilledAt?: string | null;
+  fulfilledByName?: string | null;
+}
 
 interface RequestItem {
   id: string;
@@ -46,6 +73,8 @@ interface RequestItem {
   diagnosisCode: string;
   diagnosisNotes: string;
   quantity: number;
+  items?: ServiceItemDetail[];
+  services?: ServiceItemDetail[];
   requestedByName: string;
   reviewComments: string | null;
   reviewedAt: string | null;
@@ -122,16 +151,20 @@ export default function HospitalRequestsPage() {
       ),
     },
     {
-      header: "Service Requested",
-      cell: (req) => (
-        <div>
-          <p className="font-medium text-foreground text-sm">{req.serviceName}</p>
-          <p className="text-xs text-muted-foreground">{req.category}</p>
-        </div>
-      ),
+      header: "Services Requested",
+      cell: (req) => {
+        const items = req.items || req.services || [];
+        const count = items.length;
+        return (
+          <div>
+            <p className="font-medium text-foreground text-sm">{req.serviceName}</p>
+            <p className="text-xs text-muted-foreground">{count > 1 ? `${count} itemized services` : req.category}</p>
+          </div>
+        );
+      },
     },
     {
-      header: "Amount",
+      header: "Total Cost",
       cell: (req) => (
         <span className="font-semibold text-foreground">
           ₦{req.price ? req.price.toLocaleString() : "0"}
@@ -139,7 +172,7 @@ export default function HospitalRequestsPage() {
       ),
     },
     {
-      header: "Status",
+      header: "Overall Status",
       cell: (req) => <StatusBadge status={req.status} />,
     },
     {
@@ -174,7 +207,9 @@ export default function HospitalRequestsPage() {
     { label: "All", value: "ALL" },
     { label: "Pending", value: "PENDING" },
     { label: "Approved", value: "APPROVED" },
+    { label: "More Info Required", value: "MORE_INFORMATION_REQUIRED" },
     { label: "Rejected", value: "REJECTED" },
+    { label: "Completed", value: "COMPLETED" },
   ];
 
   return (
@@ -185,11 +220,16 @@ export default function HospitalRequestsPage() {
         {/* Header */}
         <div className="relative border-b border-border/50 bg-card/30 backdrop-blur-xl px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
+                v2.0 Service-Level Tracking
+              </Badge>
+            </div>
+            <h1 className="text-2xl font-semibold flex items-center gap-2 mt-1">
               <ClipboardList className="h-6 w-6 text-primary" /> Hospital Authorization Requests
             </h1>
             <p className="text-sm text-muted-foreground">
-              Pre-authorization requests submitted by patients or doctors to HMOs
+              Monitor pre-authorization requests, itemized service decisions, and fulfillment status
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -244,12 +284,15 @@ export default function HospitalRequestsPage() {
             }}
           />
 
-          {/* Details Dialog using Radix Dialog */}
+          {/* Details Dialog */}
           {selectedReq && (
             <Dialog open={Boolean(selectedReq)} onOpenChange={(open) => !open && setSelectedReq(null)}>
-              <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="text-lg">Authorization Request Details</DialogTitle>
+                  <div className="flex items-center justify-between gap-2">
+                    <DialogTitle className="text-lg">Authorization Request Details</DialogTitle>
+                    <StatusBadge status={selectedReq.status} />
+                  </div>
                   <DialogDescription>Request ID: {selectedReq.id}</DialogDescription>
                 </DialogHeader>
 
@@ -257,7 +300,7 @@ export default function HospitalRequestsPage() {
                   {/* Status Banner */}
                   <div className="flex items-center justify-between bg-muted/50 p-4 rounded-xl border border-border">
                     <div>
-                      <p className="text-xs text-muted-foreground">Current Status</p>
+                      <p className="text-xs text-muted-foreground">Overall Request Status</p>
                       <div className="mt-1">
                         <StatusBadge status={selectedReq.status} />
                       </div>
@@ -275,9 +318,11 @@ export default function HospitalRequestsPage() {
                     )}
                   </div>
 
-                  {/* Patient Info */}
+                  {/* Patient & HMO Info */}
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Patient & HMO Info</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-primary" /> Patient & HMO Info
+                    </h4>
                     <div className="grid grid-cols-2 gap-3 text-sm bg-card p-3 rounded-lg border border-border">
                       <div>
                         <p className="text-muted-foreground text-xs">Patient Name</p>
@@ -298,33 +343,54 @@ export default function HospitalRequestsPage() {
                     </div>
                   </div>
 
-                  {/* Requested Service & Diagnosis */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Medical Service Requested</h4>
-                    <div className="bg-card p-4 rounded-lg border border-border space-y-3 text-sm">
-                      <div className="flex justify-between items-center border-b border-border pb-2">
-                        <div>
-                          <p className="font-semibold text-foreground">{selectedReq.serviceName}</p>
-                          <p className="text-xs text-muted-foreground">Category: {selectedReq.category}</p>
-                        </div>
-                        <p className="font-bold text-base">₦{selectedReq.price.toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Diagnosis / Symptoms / Notes</p>
-                        <p className="text-sm mt-0.5 text-foreground">{selectedReq.diagnosisNotes || "None provided"}</p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Itemized Services (Step 8: Provider receives decision per service) */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Stethoscope className="h-3.5 w-3.5 text-primary" /> Itemized Services & Decisions
+                    </h4>
 
-                  {/* Review Comments */}
-                  {selectedReq.reviewComments && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">HMO Review Notes</h4>
-                      <div className="bg-muted p-3 rounded-lg border border-border text-sm text-foreground">
-                        {selectedReq.reviewComments}
+                    {(selectedReq.items && selectedReq.items.length > 0 ? selectedReq.items : [
+                      {
+                        id: selectedReq.id,
+                        name: selectedReq.serviceName,
+                        category: selectedReq.category,
+                        cost: selectedReq.price,
+                        quantity: selectedReq.quantity,
+                        reason: selectedReq.diagnosisNotes,
+                        status: selectedReq.status,
+                        decisionReason: selectedReq.reviewComments,
+                        reviewedAt: selectedReq.reviewedAt,
+                      }
+                    ]).map((it: ServiceItemDetail, idx: number) => (
+                      <div key={it.id} className="p-3.5 rounded-xl border border-border bg-card space-y-2 text-sm">
+                        <div className="flex justify-between items-center pb-2 border-b">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-foreground">#{idx + 1} {it.name}</span>
+                              <Badge variant="outline" className="text-[10px]">{it.category}</Badge>
+                            </div>
+                            <span className="text-xs text-muted-foreground">Qty: {it.quantity || 1}</span>
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-bold text-foreground">₦{(it.cost || 0).toLocaleString()}</span>
+                            <StatusBadge status={it.status} />
+                          </div>
+                        </div>
+
+                        {it.reason && (
+                          <p className="text-xs text-muted-foreground">
+                            <strong>Reason:</strong> {it.reason}
+                          </p>
+                        )}
+
+                        {it.decisionReason && (
+                          <div className="p-2 bg-muted/50 rounded text-xs text-foreground">
+                            <strong>HMO Decision Note:</strong> {it.decisionReason}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
 
                 <DialogFooter>
