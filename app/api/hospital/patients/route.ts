@@ -23,6 +23,15 @@ export async function GET(request: NextRequest) {
     const allowedRoles = ["DOCTOR", "HOSPITAL_ADMIN", "PHARMACY", "LAB", "SYSTEM_ADMIN"];
 
     if (!allowedRoles.includes(userRole)) {
+      await prisma.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: "UNAUTHORIZED_ACCESS_ATTEMPT",
+          entityType: "Patient",
+          entityId: "HOSPITAL_PATIENTS",
+          details: `Role ${userRole} attempted unauthorized access to hospital patient registry (Section 8.3 violation)`,
+        },
+      });
       return NextResponse.json(
         { error: "Only hospital personnel can access this endpoint" },
         { status: 403 }
@@ -75,6 +84,15 @@ export async function GET(request: NextRequest) {
       });
 
       if (!exactPatient) {
+        await prisma.auditLog.create({
+          data: {
+            userId: session.user.id,
+            action: "UNAUTHORIZED_ACCESS_ATTEMPT",
+            entityType: "Patient",
+            entityId: membershipQuery.trim(),
+            details: `Failed patient lookup with unverified membership number: ${membershipQuery.trim()} (Section 8.3 binding check)`,
+          },
+        });
         return NextResponse.json(
           { error: "No patient found matching that exact membership number" },
           { status: 404 }

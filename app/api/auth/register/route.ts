@@ -115,10 +115,10 @@ export async function POST(req: NextRequest) {
     await prisma.auditLog.create({
       data: {
         userId: user.id,
-        action: "CREATE",
+        action: "USER_CREATED",
         entityType: "User",
         entityId: user.id,
-        details: `Patient registered`,
+        details: `Patient account created (${user.email})`,
       },
     });
 

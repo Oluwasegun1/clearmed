@@ -59,23 +59,17 @@ export class AuthorizationService {
     const allRejected = statuses.every((s) => s === "REJECTED");
     if (allRejected) return "REJECTED" as AuthStatus;
 
-    const anyMoreInfo = statuses.some((s) => s === "MORE_INFORMATION_REQUIRED");
-    const anyPending = statuses.some((s) => s === "PENDING");
-
-    if (anyMoreInfo && !anyPending) {
-      return "MORE_INFORMATION_REQUIRED" as AuthStatus;
-    }
-
-    if (anyPending) {
-      return "PENDING" as AuthStatus;
-    }
-
-    // Mixed decided (e.g. some APPROVED, some REJECTED)
+    // If at least one item is approved or completed, overall request is APPROVED for fulfillment
     const anyApproved = statuses.some((s) =>
       ["APPROVED", "AUTO_APPROVED", "COMPLETED"].includes(s)
     );
     if (anyApproved) {
       return "APPROVED" as AuthStatus;
+    }
+
+    const anyMoreInfo = statuses.some((s) => s === "MORE_INFORMATION_REQUIRED");
+    if (anyMoreInfo) {
+      return "MORE_INFORMATION_REQUIRED" as AuthStatus;
     }
 
     return "PENDING" as AuthStatus;
@@ -213,7 +207,7 @@ export class AuthorizationService {
     await prisma.auditLog.create({
       data: {
         userId: authRequest.requestedBy.userId,
-        action: "AUTH_REQUEST",
+        action: "AUTHORIZATION_CREATED",
         entityType: "AuthorizationRequest",
         entityId: authRequest.id,
         details: `Authorization request created with code ${authCode} containing ${authRequest.items.length} service item(s)`,
@@ -410,6 +404,31 @@ export class AuthorizationService {
       },
     });
 
+    // Record system audit log
+    const reviewerStaff = await prisma.hMOStaff.findUnique({
+      where: { id: reviewedById },
+      select: { userId: true },
+    });
+
+    const actionMap: Record<string, "SERVICE_APPROVED" | "SERVICE_REJECTED" | "SERVICE_MORE_INFO_REQUESTED" | "SERVICE_CANCELLED"> = {
+      APPROVED: "SERVICE_APPROVED",
+      AUTO_APPROVED: "SERVICE_APPROVED",
+      REJECTED: "SERVICE_REJECTED",
+      MORE_INFORMATION_REQUIRED: "SERVICE_MORE_INFO_REQUESTED",
+      CANCELLED: "SERVICE_CANCELLED",
+    };
+    const auditAction = actionMap[decision] || "SERVICE_APPROVED";
+
+    await prisma.auditLog.create({
+      data: {
+        userId: reviewerStaff?.userId || null,
+        action: auditAction,
+        entityType: "AuthorizationItem",
+        entityId: itemId,
+        details: `Service item "${item.description}" updated to ${decision} by HMO reviewer. Notes: ${comments || "None"}`,
+      },
+    });
+
     // Re-derive overall request status
     const allItems = await prisma.authorizationItem.findMany({
       where: { authRequestId: item.authRequestId },
@@ -598,6 +617,22 @@ export class AuthorizationService {
         },
       });
     }
+
+    // Audit log
+    const fulfiller = await prisma.hospitalStaff.findUnique({
+      where: { id: deliveredById },
+      select: { userId: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: fulfiller?.userId || null,
+        action: "SERVICE_COMPLETED",
+        entityType: "AuthorizationItem",
+        entityId: itemId,
+        details: `Service "${item.description}" fulfilled and marked COMPLETED. Cost: ₦${cost.toLocaleString()}`,
+      },
+    });
 
     return updatedItem;
   }

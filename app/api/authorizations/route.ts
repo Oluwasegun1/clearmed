@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { AuthStatus } from "@/lib/enums/AuthStatus";
+import { ERROR_MESSAGES, createErrorResponse } from "@/lib/errors";
 
 const authService = new AuthorizationService();
 
@@ -11,7 +12,10 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
@@ -101,12 +105,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(authRequest, { status: 201 });
   } catch (error: unknown) {
-    console.error("Error creating authorization request:", error);
-    let message = "Error creating authorization request";
-    if (error instanceof Error) {
-      message = error.message;
-    }
-    return NextResponse.json({ message }, { status: 500 });
+    return createErrorResponse(error, 500, "Error creating authorization request");
   }
 }
 
@@ -114,7 +113,10 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -155,7 +157,7 @@ export async function GET(request: NextRequest) {
 
       if (!patient) {
         return NextResponse.json(
-          { message: "Patient record not found" },
+          { error: ERROR_MESSAGES.PATIENT_NOT_FOUND },
           { status: 404 }
         );
       }
@@ -346,11 +348,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(transformed);
   } catch (error: unknown) {
-    console.error("Error fetching authorization requests:", error);
-    let message = "Error fetching authorization requests";
-    if (error instanceof Error) {
-      message = error.message;
-    }
-    return NextResponse.json({ message }, { status: 500 });
+    return createErrorResponse(error, 500, "Error fetching authorization requests");
   }
 }

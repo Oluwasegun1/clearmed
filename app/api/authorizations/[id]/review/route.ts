@@ -5,6 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { UserRole } from "@/lib/enums/UserRole";
 import { AuthStatus } from "@/lib/enums/AuthStatus";
 import { prisma } from "@/lib/prisma";
+import { ERROR_MESSAGES, createErrorResponse } from "@/lib/errors";
 
 const authService = new AuthorizationService();
 
@@ -15,7 +16,10 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     const userRole = session.user.role as UserRole;
@@ -25,7 +29,7 @@ export async function POST(
       userRole !== "SYSTEM_ADMIN"
     ) {
       return NextResponse.json(
-        { message: "Only HMO staff can review authorization requests" },
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
         { status: 403 }
       );
     }
@@ -41,39 +45,68 @@ export async function POST(
       );
     }
 
-    let reviewerStaffId = session.user.id;
+    let reviewerStaffId: string | null = null;
 
-    if (userRole === "HMO_STAFF" || userRole === "HMO_ADMIN") {
-      const staff = await prisma.hMOStaff.findFirst({
-        where: { userId: session.user.id },
+    let staff = await prisma.hMOStaff.findFirst({
+      where: { userId: session.user.id },
+    });
+
+    if (!staff) {
+      const orgMem = await prisma.orgMembership.findFirst({
+        where: { userId: session.user.id, orgType: "HMO", isActive: true },
       });
-
-      if (!staff) {
-        return NextResponse.json(
-          { message: "HMO staff record not found for user" },
-          { status: 404 }
-        );
+      if (orgMem) {
+        staff = await prisma.hMOStaff.findFirst({
+          where: { hmoId: orgMem.orgId },
+        });
       }
-      reviewerStaffId = staff.id;
+    }
 
-      const authRequest = await prisma.authorizationRequest.findUnique({
-        where: { id: requestId },
-        include: { patient: true },
-      });
+    const authRequest = await prisma.authorizationRequest.findUnique({
+      where: { id: requestId },
+      include: { patient: true },
+    });
 
-      if (!authRequest) {
-        return NextResponse.json(
-          { message: "Authorization request not found" },
-          { status: 404 }
-        );
+    if (!authRequest) {
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTHORIZATION_NOT_FOUND },
+        { status: 404 }
+      );
+    }
+
+    if (!staff) {
+      if (userRole === "SYSTEM_ADMIN") {
+        if (authRequest.patient?.hmoId) {
+          staff = await prisma.hMOStaff.findFirst({
+            where: { hmoId: authRequest.patient.hmoId },
+          });
+        }
+        if (!staff) {
+          staff = await prisma.hMOStaff.findFirst();
+        }
       }
+    }
 
-      if (authRequest.patient && authRequest.patient.hmoId !== staff.hmoId) {
-        return NextResponse.json(
-          { message: "You can only review requests for your HMO" },
-          { status: 403 }
-        );
-      }
+    if (!staff) {
+      return NextResponse.json(
+        { error: "HMO staff record not found for user" },
+        { status: 404 }
+      );
+    }
+
+    reviewerStaffId = staff.id;
+
+    if (
+      userRole !== "SYSTEM_ADMIN" &&
+      authRequest.patient &&
+      authRequest.patient.hmoId &&
+      staff.hmoId &&
+      authRequest.patient.hmoId !== staff.hmoId
+    ) {
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 403 }
+      );
     }
 
     const review = await authService.reviewAuthorizationRequest({
@@ -85,13 +118,6 @@ export async function POST(
 
     return NextResponse.json(review, { status: 201 });
   } catch (error: unknown) {
-    console.error("Error reviewing authorization request:", error);
-    let message = "Error reviewing authorization request";
-
-    if (error instanceof Error) {
-      message = error.message;
-    }
-
-    return NextResponse.json({ message }, { status: 500 });
+    return createErrorResponse(error, 500, "Error reviewing authorization request");
   }
 }

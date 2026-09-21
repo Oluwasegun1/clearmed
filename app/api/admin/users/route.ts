@@ -6,13 +6,26 @@ import { prisma } from "@/lib/prisma";
  * GET /api/admin/users
  * Returns all user accounts. SYSTEM_ADMIN only.
  * Query params:
- *   role — filter by UserRole (optional)
- *   page — page number (default 1)
- *   limit — page size (default 50)
+ *   role    — filter by UserRole (optional)
+ *   page    — page number (default 1)
+ *   limit   — page size (default 50)
+ *   search  — search by name / email
  *
  * PATCH /api/admin/users
- * Body: { userId, isActive } — toggle a user's active status
+ * Body (activate/soft-deactivate): { userId, isActive: boolean }
+ * Body (role change):               { userId, role: string }
  */
+
+const VALID_ROLES = [
+  "PATIENT",
+  "DOCTOR",
+  "HOSPITAL_ADMIN",
+  "PHARMACY",
+  "LAB",
+  "HMO_STAFF",
+  "HMO_ADMIN",
+  "SYSTEM_ADMIN",
+];
 
 async function requireAdmin(session: Awaited<ReturnType<typeof getSession>>) {
   if (!session?.user) {
@@ -55,6 +68,7 @@ export async function GET(req: NextRequest) {
           email: true,
           firstName: true,
           lastName: true,
+          phoneNumber: true,
           role: true,
           isActive: true,
           createdAt: true,
@@ -91,16 +105,56 @@ export async function PATCH(req: NextRequest) {
     if (guard) return guard;
 
     const body = await req.json();
-    const { userId, isActive } = body;
+    const { userId, isActive, role } = body;
 
-    if (!userId || typeof isActive !== "boolean") {
+    if (!userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 });
+    }
+
+    // ── Role change ────────────────────────────────────────────────────────────
+    if (role !== undefined) {
+      if (!VALID_ROLES.includes(role)) {
+        return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+      }
+      if (userId === session!.user.id) {
+        return NextResponse.json({ error: "You cannot change your own role" }, { status: 400 });
+      }
+
+      const target = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      if (!target) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { role: role as never },
+        select: { id: true, email: true, role: true, isActive: true },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId: session!.user.id,
+          action: "USER_UPDATED",
+          entityType: "User",
+          entityId: userId,
+          details: `Role changed from ${target.role} to ${role} by admin`,
+        },
+      });
+
+      return NextResponse.json(updatedUser);
+    }
+
+    // ── Activate / soft-deactivate ────────────────────────────────────────────
+    if (typeof isActive !== "boolean") {
       return NextResponse.json(
-        { error: "userId and isActive (boolean) are required" },
+        { error: "Either isActive (boolean) or role (string) is required" },
         { status: 400 },
       );
     }
 
-    // Prevent admin from deactivating themselves
     if (userId === session!.user.id && !isActive) {
       return NextResponse.json(
         { error: "You cannot deactivate your own account" },
@@ -114,14 +168,13 @@ export async function PATCH(req: NextRequest) {
       select: { id: true, email: true, isActive: true, role: true },
     });
 
-    // Audit log
     await prisma.auditLog.create({
       data: {
         userId: session!.user.id,
-        action: "UPDATE",
+        action: "USER_UPDATED",
         entityType: "User",
         entityId: userId,
-        details: `User account ${isActive ? "activated" : "deactivated"} by admin`,
+        details: `User account ${isActive ? "activated" : "deactivated/soft-deleted"} by admin`,
       },
     });
 

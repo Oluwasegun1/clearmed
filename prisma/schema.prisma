@@ -145,6 +145,7 @@ model HMO {
   phoneNumber       String
   email             String
   licenseNumber     String            @unique
+  logoUrl           String?           // Optional logo URL for display
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   isActive          Boolean           @default(true)
@@ -176,6 +177,11 @@ model CoveragePlan {
   hmo               HMO               @relation(fields: [hmoId], references: [id], onDelete: Cascade)
   name              String
   description       String?
+  annualLimit       Float?            // Annual limit in Naira (e.g., 500000, 2000000)
+  coveragePercent   Float?            // Coverage percentage (e.g., 70, 90)
+  includedServices  String?           // JSON array of included services stored as string
+  excludedServices  String?           // JSON array of excluded services stored as string
+  resetCadence      String?           @default("ANNUAL") // ANNUAL, MONTHLY, POLICY_START
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   isActive          Boolean           @default(true)
@@ -358,16 +364,28 @@ model Notification {
 }
 
 enum AuditAction {
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  USER_CREATED
+  USER_UPDATED
+  AUTHORIZATION_CREATED
+  SERVICE_APPROVED
+  SERVICE_REJECTED
+  SERVICE_MORE_INFO_REQUESTED
+  SERVICE_COMPLETED
+  SERVICE_CANCELLED
+  PATIENT_UPDATED
+  HMO_UPDATED
+  HOSPITAL_UPDATED
+  UNAUTHORIZED_ACCESS_ATTEMPT
+  ACCOUNT_LOCKED
+  MFA_VERIFIED
+  MFA_FAILED
   CREATE
   READ
   UPDATE
   DELETE
-  LOGIN
-  LOGOUT
-  LOGIN_FAILED
-  ACCOUNT_LOCKED
-  MFA_VERIFIED
-  MFA_FAILED
   AUTH_REQUEST
   AUTH_REVIEW
   SERVICE_DELIVERY
@@ -375,10 +393,10 @@ enum AuditAction {
 
 model AuditLog {
   id                String            @id @default(cuid())
-  userId            String
-  user              User              @relation(fields: [userId], references: [id])
+  userId            String?
+  user              User?             @relation(fields: [userId], references: [id])
   action            AuditAction
-  entityType        String            // e.g., "User", "AuthorizationRequest", "Service"
+  entityType        String            // e.g., "User", "AuthorizationRequest", "Patient", "HMO", "Hospital", "Security"
   entityId          String
   details           String?
   ipAddress         String?

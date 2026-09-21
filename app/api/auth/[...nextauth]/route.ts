@@ -31,10 +31,27 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user) {
+          await prisma.auditLog.create({
+            data: {
+              action: "LOGIN_FAILED",
+              entityType: "User",
+              entityId: normalizedEmail,
+              details: `Failed login attempt: no user found for ${normalizedEmail}`,
+            },
+          });
           throw new Error("Invalid email or password");
         }
 
         if (!user.isActive) {
+          await prisma.auditLog.create({
+            data: {
+              userId: user.id,
+              action: "UNAUTHORIZED_ACCESS_ATTEMPT",
+              entityType: "User",
+              entityId: user.id,
+              details: `Unauthorized login attempt on deactivated account ${normalizedEmail}`,
+            },
+          });
           throw new Error("Account is deactivated. Contact support.");
         }
 
@@ -197,6 +214,26 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/auth/login",
+  },
+  events: {
+    async signOut(message) {
+      const userId = (message?.token as { id?: string })?.id;
+      if (userId) {
+        try {
+          await prisma.auditLog.create({
+            data: {
+              userId,
+              action: "LOGOUT",
+              entityType: "User",
+              entityId: userId,
+              details: "User signed out",
+            },
+          });
+        } catch {
+          // Non-blocking
+        }
+      }
+    },
   },
   secret: authSecret,
 };

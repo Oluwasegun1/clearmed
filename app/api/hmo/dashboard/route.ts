@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { ERROR_MESSAGES, createErrorResponse } from "@/lib/errors";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     const userRole = session.user.role;
@@ -267,11 +271,6 @@ export async function GET(request: NextRequest) {
       queue: serviceQueue,
     });
   } catch (error: unknown) {
-    console.error("Error fetching HMO dashboard data:", error);
-    let message = "Error fetching HMO dashboard";
-    if (error instanceof Error) {
-      message = error.message;
-    }
-    return NextResponse.json({ message }, { status: 500 });
+    return createErrorResponse(error, 500, "Error fetching HMO dashboard");
   }
 }

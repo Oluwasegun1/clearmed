@@ -584,7 +584,11 @@ export default function HMORequestsPage() {
                                 disabled={isItemSubmitting}
                                 onClick={() => submitItemReview(item.id, "MORE_INFORMATION_REQUIRED")}
                               >
-                                <FileQuestion className="h-3.5 w-3.5 text-purple-600" />
+                                {isItemSubmitting ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <FileQuestion className="h-3.5 w-3.5 text-purple-600" />
+                                )}
                                 Request More Info
                               </Button>
 
@@ -596,7 +600,11 @@ export default function HMORequestsPage() {
                                 disabled={isItemSubmitting}
                                 onClick={() => submitItemReview(item.id, "REJECTED")}
                               >
-                                <XCircle className="h-3.5 w-3.5" />
+                                {isItemSubmitting ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <XCircle className="h-3.5 w-3.5" />
+                                )}
                                 Reject Service
                               </Button>
                             </div>

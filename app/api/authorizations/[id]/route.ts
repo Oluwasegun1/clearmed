@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ERROR_MESSAGES, createErrorResponse } from "@/lib/errors";
 
 export async function GET(
   req: NextRequest,
@@ -10,7 +11,10 @@ export async function GET(
     const session = await getSession();
 
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     const { id: authorizationId } = await context.params;
@@ -111,7 +115,7 @@ export async function GET(
 
     if (!authorization) {
       return NextResponse.json(
-        { error: "Authorization request not found" },
+        { error: ERROR_MESSAGES.AUTHORIZATION_NOT_FOUND },
         { status: 404 }
       );
     }
@@ -121,7 +125,7 @@ export async function GET(
 
     if (userRole === "PATIENT" && authorization.patient?.user?.id !== userId) {
       return NextResponse.json(
-        { error: "You don't have permission to view this authorization" },
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
         { status: 403 }
       );
     }
@@ -180,10 +184,6 @@ export async function GET(
       previousAuthorizations,
     });
   } catch (error) {
-    console.error("Error fetching authorization:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch authorization details" },
-      { status: 500 }
-    );
+    return createErrorResponse(error, 500);
   }
 }

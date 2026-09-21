@@ -134,7 +134,9 @@ export default function AuthorizationList({ counts }: AuthorizationListProps) {
               <FileText className="h-10 w-10 text-muted-foreground/50 mx-auto" />
               <div>
                 <p className="text-sm font-medium text-foreground">No authorization requests yet</p>
-                <p className="text-xs text-muted-foreground">Submit your first treatment or medication request</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                  Authorization requests created by your healthcare provider or doctor will appear here.
+                </p>
               </div>
               <Button asChild size="sm" className="gap-1.5">
                 <Link href="/personal/request/new">

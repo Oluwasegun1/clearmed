@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ERROR_MESSAGES, createErrorResponse } from "@/lib/errors";
 
 /**
  * GET /api/patient/coverage
@@ -13,13 +14,16 @@ export async function GET(_req: NextRequest) {
     const session = await getSession();
 
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     if (session.user.role !== "PATIENT") {
       return NextResponse.json(
-        { error: "Only patients can access this endpoint" },
-        { status: 403 },
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 403 }
       );
     }
 
@@ -50,7 +54,10 @@ export async function GET(_req: NextRequest) {
     });
 
     if (!patient) {
-      return NextResponse.json({ error: "Patient not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.PATIENT_NOT_FOUND },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
@@ -76,9 +83,6 @@ export async function GET(_req: NextRequest) {
       })),
     });
   } catch (error: unknown) {
-    console.error("Error fetching patient coverage:", error);
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch coverage";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return createErrorResponse(error, 500, "Failed to fetch coverage");
   }
 }

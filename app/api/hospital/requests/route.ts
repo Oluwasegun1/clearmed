@@ -7,12 +7,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { ERROR_MESSAGES, createErrorResponse } from "@/lib/errors";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.AUTH_UNAUTHORIZED },
+        { status: 401 }
+      );
     }
 
     // Resolve hospitalId for the current user
@@ -201,7 +205,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(transformed);
   } catch (error: unknown) {
-    console.error("Error fetching hospital requests:", error);
-    return NextResponse.json({ error: "Failed to fetch hospital requests" }, { status: 500 });
+    return createErrorResponse(error, 500, "Failed to fetch hospital requests");
   }
 }

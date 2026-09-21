@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Admin Audit Log Viewer.
+ * Admin Audit Log Viewer (v2.0).
  * Browseable, searchable, filterable paginated view of all system AuditLog records.
+ * Compliant with NDPA 12-month minimum retention mandate and immutable record-keeping.
  * Restricted to SYSTEM_ADMIN.
  */
 
@@ -31,6 +32,18 @@ import {
   Trash2,
   PlusCircle,
   Edit3,
+  ShieldAlert,
+  HelpCircle,
+  CheckCircle2,
+  XCircle,
+  UserPlus,
+  UserCog,
+  Building2,
+  Activity,
+  HeartHandshake,
+  FileQuestion,
+  Ban,
+  ShieldCheck,
 } from "lucide-react";
 
 interface AuditEntry {
@@ -42,13 +55,13 @@ interface AuditEntry {
   ipAddress: string | null;
   userAgent: string | null;
   timestamp: string;
-  user: {
+  user?: {
     id: string;
     firstName: string;
     lastName: string;
     email: string;
     role: string;
-  };
+  } | null;
 }
 
 interface PageData {
@@ -64,32 +77,49 @@ const ACTION_OPTIONS = [
   { label: "Login", value: "LOGIN" },
   { label: "Logout", value: "LOGOUT" },
   { label: "Login Failed", value: "LOGIN_FAILED" },
+  { label: "Unauthorized Access Attempt", value: "UNAUTHORIZED_ACCESS_ATTEMPT" },
+  { label: "User Created", value: "USER_CREATED" },
+  { label: "User Updated", value: "USER_UPDATED" },
+  { label: "Authorization Created", value: "AUTHORIZATION_CREATED" },
+  { label: "Service Approved", value: "SERVICE_APPROVED" },
+  { label: "Service Rejected", value: "SERVICE_REJECTED" },
+  { label: "Service Info Requested", value: "SERVICE_MORE_INFO_REQUESTED" },
+  { label: "Service Completed", value: "SERVICE_COMPLETED" },
+  { label: "Service Cancelled", value: "SERVICE_CANCELLED" },
+  { label: "Patient Updated", value: "PATIENT_UPDATED" },
+  { label: "HMO Updated", value: "HMO_UPDATED" },
+  { label: "Hospital Updated", value: "HOSPITAL_UPDATED" },
   { label: "Account Locked", value: "ACCOUNT_LOCKED" },
   { label: "MFA Verified", value: "MFA_VERIFIED" },
   { label: "MFA Failed", value: "MFA_FAILED" },
-  { label: "Auth Request", value: "AUTH_REQUEST" },
-  { label: "Auth Review", value: "AUTH_REVIEW" },
-  { label: "Service Delivery", value: "SERVICE_DELIVERY" },
-  { label: "Create", value: "CREATE" },
-  { label: "Read", value: "READ" },
-  { label: "Update", value: "UPDATE" },
-  { label: "Delete", value: "DELETE" },
 ];
 
 const ACTION_COLORS: Record<string, string> = {
   LOGIN: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
   LOGOUT: "bg-muted text-muted-foreground border-border",
   LOGIN_FAILED: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20",
+  UNAUTHORIZED_ACCESS_ATTEMPT: "bg-red-600/15 text-red-700 dark:text-red-400 border-red-600/30 font-bold",
+  USER_CREATED: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  USER_UPDATED: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20",
+  AUTHORIZATION_CREATED: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
+  SERVICE_APPROVED: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
+  SERVICE_REJECTED: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20",
+  SERVICE_MORE_INFO_REQUESTED: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
+  SERVICE_COMPLETED: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
+  SERVICE_CANCELLED: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-400 border-zinc-500/20",
+  PATIENT_UPDATED: "bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20",
+  HMO_UPDATED: "bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20",
+  HOSPITAL_UPDATED: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20",
   ACCOUNT_LOCKED: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20",
   MFA_VERIFIED: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
   MFA_FAILED: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
-  AUTH_REQUEST: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20",
-  AUTH_REVIEW: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
-  SERVICE_DELIVERY: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
   CREATE: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
   READ: "bg-muted text-muted-foreground border-border",
   UPDATE: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
   DELETE: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20",
+  AUTH_REQUEST: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
+  AUTH_REVIEW: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
+  SERVICE_DELIVERY: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20",
 };
 
 function ActionIcon({ action }: { action: string }) {
@@ -98,12 +128,21 @@ function ActionIcon({ action }: { action: string }) {
     case "LOGIN": return <LogIn className={cls} />;
     case "LOGOUT": return <LogOut className={cls} />;
     case "LOGIN_FAILED": return <AlertCircle className={cls} />;
+    case "UNAUTHORIZED_ACCESS_ATTEMPT": return <ShieldAlert className={cls} />;
+    case "USER_CREATED": return <UserPlus className={cls} />;
+    case "USER_UPDATED": return <UserCog className={cls} />;
+    case "AUTHORIZATION_CREATED": return <ClipboardList className={cls} />;
+    case "SERVICE_APPROVED": return <CheckCircle2 className={cls} />;
+    case "SERVICE_REJECTED": return <XCircle className={cls} />;
+    case "SERVICE_MORE_INFO_REQUESTED": return <FileQuestion className={cls} />;
+    case "SERVICE_COMPLETED": return <UserCheck className={cls} />;
+    case "SERVICE_CANCELLED": return <Ban className={cls} />;
+    case "PATIENT_UPDATED": return <HeartHandshake className={cls} />;
+    case "HMO_UPDATED": return <Activity className={cls} />;
+    case "HOSPITAL_UPDATED": return <Building2 className={cls} />;
     case "ACCOUNT_LOCKED": return <Lock className={cls} />;
-    case "MFA_VERIFIED": return <Shield className={cls} />;
+    case "MFA_VERIFIED": return <ShieldCheck className={cls} />;
     case "MFA_FAILED": return <AlertCircle className={cls} />;
-    case "AUTH_REQUEST": return <ClipboardList className={cls} />;
-    case "AUTH_REVIEW": return <ClipboardCheck className={cls} />;
-    case "SERVICE_DELIVERY": return <UserCheck className={cls} />;
     case "CREATE": return <PlusCircle className={cls} />;
     case "READ": return <Eye className={cls} />;
     case "UPDATE": return <Edit3 className={cls} />;
@@ -171,14 +210,19 @@ export default function AuditLogPage() {
       {/* Header */}
       <div className="relative border-b border-border/50 bg-card/30 backdrop-blur-xl px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
-            Audit Log
-          </h1>
-          <p className="text-sm text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold flex items-center gap-2">
+              <FileText className="h-6 w-6 text-primary" />
+              Audit Log & Compliance Trail
+            </h1>
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs">
+              <ShieldCheck className="h-3 w-3 mr-1" /> Immutable (NDPA 12-Mo Retention)
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">
             {loading
               ? "Loading..."
-              : `${data?.total ?? 0} total system events recorded`}
+              : `${data?.total ?? 0} total system events recorded · Audit records cannot be modified by users`}
           </p>
         </div>
         <Button
@@ -199,7 +243,7 @@ export default function AuditLogPage() {
           <CardContent className="p-4">
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <Filter className="h-3.5 w-3.5" /> Filters
+                <Filter className="h-3.5 w-3.5" /> Filters & Search
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Search */}
@@ -326,51 +370,68 @@ export default function AuditLogPage() {
                           </Badge>
                           <span className="text-xs text-muted-foreground">
                             on{" "}
-                            <span className="font-mono text-foreground">
+                            <span className="font-mono text-foreground font-medium">
                               {entry.entityType}
                             </span>
                           </span>
-                          <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground truncate max-w-[140px]">
+                          <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground truncate max-w-[160px]">
                             {entry.entityId}
                           </code>
                         </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 font-mono">
                           {new Date(entry.timestamp).toLocaleString("en-GB", {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
                             hour: "2-digit",
                             minute: "2-digit",
+                            second: "2-digit",
                           })}
                         </span>
                       </div>
 
                       {entry.details && (
-                        <p className="text-sm text-foreground mt-1.5">
+                        <p className="text-sm text-foreground mt-1.5 font-medium">
                           {entry.details}
                         </p>
                       )}
 
                       {/* Actor */}
-                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                        <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-[10px] shrink-0">
-                          {entry.user.firstName.charAt(0)}
-                        </div>
-                        <span>
-                          <span className="font-medium text-foreground">
-                            {entry.user.firstName} {entry.user.lastName}
-                          </span>{" "}
-                          · {entry.user.email} ·{" "}
-                          <Badge variant="secondary" className="text-[10px] py-0">
-                            {formatAction(entry.user.role)}
-                          </Badge>
-                        </span>
-                        {entry.ipAddress && (
-                          <span className="hidden sm:inline text-muted-foreground/60">
-                            · IP: {entry.ipAddress}
+                      {entry.user ? (
+                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+                          <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-[10px] shrink-0">
+                            {entry.user.firstName ? entry.user.firstName.charAt(0).toUpperCase() : "U"}
+                          </div>
+                          <span>
+                            <span className="font-semibold text-foreground">
+                              {entry.user.firstName} {entry.user.lastName}
+                            </span>{" "}
+                            · {entry.user.email} ·{" "}
+                            <Badge variant="secondary" className="text-[10px] py-0 font-normal">
+                              {formatAction(entry.user.role)}
+                            </Badge>
                           </span>
-                        )}
-                      </div>
+                          {entry.ipAddress && (
+                            <span className="text-muted-foreground/70 font-mono text-[11px]">
+                              · IP: {entry.ipAddress}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground flex-wrap">
+                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-semibold text-[10px] shrink-0">
+                            <Shield className="h-3 w-3" />
+                          </div>
+                          <span className="font-medium text-muted-foreground italic">
+                            Unauthenticated / System Event
+                          </span>
+                          {entry.ipAddress && (
+                            <span className="text-muted-foreground/70 font-mono text-[11px]">
+                              · IP: {entry.ipAddress}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>

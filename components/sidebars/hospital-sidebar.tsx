@@ -178,6 +178,11 @@ export function HospitalSidebar({
       title: "Pharmacy",
       items: [
         {
+          title: "Authorization Queue",
+          href: "/hospital/pharmacy/authorizations",
+          icon: <ClipboardList className="h-4 w-4" />,
+        },
+        {
           title: "Verify Prescription",
           href: "/hospital/pharmacy/verify",
           icon: <ClipboardCheck className="h-4 w-4" />,
@@ -206,6 +211,11 @@ export function HospitalSidebar({
     {
       title: "Laboratory",
       items: [
+        {
+          title: "Authorization Queue",
+          href: "/hospital/lab/authorizations",
+          icon: <ClipboardList className="h-4 w-4" />,
+        },
         {
           title: "Verify Test Authorization",
           href: "/hospital/lab/verify",

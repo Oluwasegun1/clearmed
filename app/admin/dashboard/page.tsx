@@ -24,6 +24,9 @@ import {
   ArrowRight,
   Loader2,
   Shield,
+  Stethoscope,
+  CreditCard,
+  UserCheck,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -37,9 +40,10 @@ interface StatCardProps {
   icon: React.ReactNode;
   loading?: boolean;
   href?: string;
+  accent?: string;
 }
 
-function StatCard({ title, value, description, icon, loading, href }: StatCardProps) {
+function StatCard({ title, value, description, icon, loading, href, accent = "bg-primary/10 text-primary" }: StatCardProps) {
   const router = useRouter();
   return (
     <Card
@@ -48,7 +52,7 @@ function StatCard({ title, value, description, icon, loading, href }: StatCardPr
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+        <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${accent}`}>
           {icon}
         </div>
       </CardHeader>
@@ -109,40 +113,45 @@ function ActionCard({ title, description, icon, href, cta, accent }: ActionCardP
 
 /* ── Dashboard page ─────────────────────────────────────────────── */
 
-interface Stats {
-  hospitals: number;
-  hmos: number;
-  users: number;
-  auditLogs: number;
+interface AdminStats {
+  totalUsers: number;
+  totalPatients: number;
+  totalHospitals: number;
+  totalHMOs: number;
+  totalRequests: number;
+  pendingRequests: number;
+  approvedRequests: number;
+  rejectedRequests: number;
 }
+
+const emptyStats: AdminStats = {
+  totalUsers: 0,
+  totalPatients: 0,
+  totalHospitals: 0,
+  totalHMOs: 0,
+  totalRequests: 0,
+  pendingRequests: 0,
+  approvedRequests: 0,
+  rejectedRequests: 0,
+};
 
 export default function AdminDashboardPage() {
   const { data: session } = useSession();
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [hRes, mRes, uRes, aRes] = await Promise.all([
-          fetch("/api/admin/hospitals"),
-          fetch("/api/admin/hmos"),
-          fetch("/api/admin/users?limit=1"),
-          fetch("/api/admin/audit-log?limit=1"),
-        ]);
-        const hospitals = hRes.ok ? await hRes.json() : [];
-        const hmos = mRes.ok ? await mRes.json() : [];
-        const usersData = uRes.ok ? await uRes.json() : { total: 0 };
-        const auditData = aRes.ok ? await aRes.json() : { total: 0 };
-
-        setStats({
-          hospitals: Array.isArray(hospitals) ? hospitals.length : 0,
-          hmos: Array.isArray(hmos) ? hmos.length : 0,
-          users: typeof usersData?.total === "number" ? usersData.total : 0,
-          auditLogs: typeof auditData?.total === "number" ? auditData.total : 0,
-        });
+        const res = await fetch("/api/admin/stats");
+        if (res.ok) {
+          const data: AdminStats = await res.json();
+          setStats(data);
+        } else {
+          setStats(emptyStats);
+        }
       } catch {
-        setStats({ hospitals: 0, hmos: 0, users: 0, auditLogs: 0 });
+        setStats(emptyStats);
       } finally {
         setStatsLoading(false);
       }
@@ -171,40 +180,89 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Stats row */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Hospitals"
-            value={stats?.hospitals ?? "—"}
-            description="Registered facilities"
-            icon={<Building2 className="h-4 w-4" />}
-            loading={statsLoading}
-            href="/admin/hospitals"
-          />
-          <StatCard
-            title="HMOs"
-            value={stats?.hmos ?? "—"}
-            description="Health maintenance organisations"
-            icon={<Activity className="h-4 w-4" />}
-            loading={statsLoading}
-            href="/admin/hmos"
-          />
-          <StatCard
-            title="Users"
-            value={stats?.users ?? "—"}
-            description="Total user accounts"
-            icon={<Users className="h-4 w-4" />}
-            loading={statsLoading}
-            href="/admin/users"
-          />
-          <StatCard
-            title="Audit Log Entries"
-            value={stats?.auditLogs ?? "—"}
-            description="System activity records"
-            icon={<FileText className="h-4 w-4" />}
-            loading={statsLoading}
-            href="/admin/audit-log"
-          />
+        {/* ── Registry Stats ── */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Registry
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Total Users"
+              value={stats?.totalUsers ?? "—"}
+              description="All registered accounts"
+              icon={<Users className="h-4 w-4" />}
+              accent="bg-primary/10 text-primary"
+              loading={statsLoading}
+              href="/admin/users"
+            />
+            <StatCard
+              title="Total Patients"
+              value={stats?.totalPatients ?? "—"}
+              description="Enrolled HMO members"
+              icon={<UserCheck className="h-4 w-4" />}
+              accent="bg-blue-500/10 text-blue-600"
+              loading={statsLoading}
+            />
+            <StatCard
+              title="Total Hospitals"
+              value={stats?.totalHospitals ?? "—"}
+              description="Registered facilities"
+              icon={<Building2 className="h-4 w-4" />}
+              accent="bg-indigo-500/10 text-indigo-600"
+              loading={statsLoading}
+              href="/admin/hospitals"
+            />
+            <StatCard
+              title="Total HMOs"
+              value={stats?.totalHMOs ?? "—"}
+              description="Health maintenance organisations"
+              icon={<Activity className="h-4 w-4" />}
+              accent="bg-violet-500/10 text-violet-600"
+              loading={statsLoading}
+              href="/admin/hmos"
+            />
+          </div>
+        </div>
+
+        {/* ── Authorization Request Stats ── */}
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Authorization Requests
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Total Requests"
+              value={stats?.totalRequests ?? "—"}
+              description="All pre-auth requests submitted"
+              icon={<FileText className="h-4 w-4" />}
+              accent="bg-slate-500/10 text-slate-600"
+              loading={statsLoading}
+            />
+            <StatCard
+              title="Pending"
+              value={stats?.pendingRequests ?? "—"}
+              description="Awaiting HMO review"
+              icon={<CreditCard className="h-4 w-4" />}
+              accent="bg-yellow-500/10 text-yellow-600"
+              loading={statsLoading}
+            />
+            <StatCard
+              title="Approved"
+              value={stats?.approvedRequests ?? "—"}
+              description="Approved by HMO (incl. auto-approved)"
+              icon={<Stethoscope className="h-4 w-4" />}
+              accent="bg-green-500/10 text-green-600"
+              loading={statsLoading}
+            />
+            <StatCard
+              title="Rejected"
+              value={stats?.rejectedRequests ?? "—"}
+              description="Declined by HMO"
+              icon={<Shield className="h-4 w-4" />}
+              accent="bg-red-500/10 text-red-600"
+              loading={statsLoading}
+            />
+          </div>
         </div>
 
         {/* Quick actions */}

@@ -32,6 +32,18 @@ export async function middleware(request: NextRequest) {
   }
 
   const token = await getToken({ req: request, secret: authSecret });
+  const role = typeof token?.role === "string" ? token.role : "";
+  const hasValidToken = Boolean(token && token.id && role);
+
+  // Helper to clear session cookies and redirect to login
+  const createLogoutRedirect = () => {
+    const response = NextResponse.redirect(new URL("/auth/login", request.url));
+    response.cookies.delete("next-auth.session-token");
+    response.cookies.delete("__Secure-next-auth.session-token");
+    response.cookies.delete("next-auth.csrf-token");
+    response.cookies.delete("__Host-next-auth.csrf-token");
+    return response;
+  };
 
   // Public routes accessible without authentication
   const publicRoutes = [
@@ -53,13 +65,15 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(prefix)
   );
 
-  // If not authenticated and trying to access protected route
-  if (!token && isProtectedRoute) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
+  // If trying to access protected route without valid authentication/role -> redirect & clear cookies
+  if (isProtectedRoute) {
+    if (!hasValidToken) {
+      return createLogoutRedirect();
+    }
   }
 
   // 2. MFA Enforcement: Non-patient roles must complete MFA before accessing protected routes
-  if (token) {
+  if (hasValidToken && token) {
     const mfaRequired = Boolean(token.mfaRequired);
     const mfaVerified = Boolean(token.mfaVerified);
 
@@ -69,8 +83,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Authenticated user on home: redirect to role-specific dashboard
-  if (token && pathname === "/") {
-    const role = token.role as string;
+  if (hasValidToken && pathname === "/") {
     if (role === "PATIENT") {
       return NextResponse.redirect(new URL("/personal/dashboard", request.url));
     }
@@ -82,7 +95,7 @@ export async function middleware(request: NextRequest) {
     ) {
       return NextResponse.redirect(new URL("/hospital/dashboard", request.url));
     }
-    if (role?.startsWith("HMO_")) {
+    if (role.startsWith("HMO_")) {
       return NextResponse.redirect(new URL("/hmo/dashboard", request.url));
     }
     if (role === "SYSTEM_ADMIN") {
@@ -91,11 +104,10 @@ export async function middleware(request: NextRequest) {
   }
 
   // Allow /auth/login and /auth/mfa when authenticated so user can complete MFA or sign out
-  if (token && isPublicRoute && !pathname.startsWith("/sidebar-demo") && pathname !== "/") {
+  if (hasValidToken && isPublicRoute && !pathname.startsWith("/sidebar-demo") && pathname !== "/") {
     if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/mfa")) {
       return NextResponse.next();
     }
-    const role = token.role as string;
     if (role.includes("PATIENT")) {
       return NextResponse.redirect(new URL("/personal/dashboard", request.url));
     }
@@ -116,9 +128,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Role-based access control
-  if (token) {
-    const role = token.role as string;
-
+  if (hasValidToken && isProtectedRoute) {
     if (pathname.startsWith("/personal") && !role.includes("PATIENT")) {
       return NextResponse.redirect(new URL("/auth/unauthorized", request.url));
     }

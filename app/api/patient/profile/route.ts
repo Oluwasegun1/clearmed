@@ -26,7 +26,18 @@ export async function GET(req: NextRequest) {
           select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true },
         },
         hmo: { select: { id: true, name: true } },
-        coveragePlan: { select: { id: true, name: true, description: true } },
+        coveragePlan: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            annualLimit: true,
+            coveragePercent: true,
+            resetCadence: true,
+            includedServices: true,
+            excludedServices: true,
+          },
+        },
       },
     });
 
@@ -46,9 +57,9 @@ export async function GET(req: NextRequest) {
       orderBy: { requestDate: "desc" },
     });
 
-    const coveragePercentage = 85;
+    const coveragePercentage = patient.coveragePlan?.coveragePercent ?? 85;
     const coverageRate = coveragePercentage / 100;
-    const annualLimit = 500000;
+    const annualLimit = patient.coveragePlan?.annualLimit ?? 500000;
 
     // Coverage calculation, in order:
     // • Service Cost — submitted cost per service
@@ -183,6 +194,16 @@ export async function PATCH(req: NextRequest) {
         lastName: true,
         email: true,
         phoneNumber: true,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: session.user.id,
+        action: "PATIENT_UPDATED",
+        entityType: "Patient",
+        entityId: session.user.id,
+        details: `Patient profile updated by user (${updatedUser.email})`,
       },
     });
 
