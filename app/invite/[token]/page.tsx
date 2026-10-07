@@ -126,7 +126,7 @@ export default function InviteAcceptPage() {
         <Card className="w-full max-w-md data-visualization">
           <CardContent className="p-6 text-center space-y-4">
             <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
-            <h2 className="text-lg font-semibold">You're in!</h2>
+            <h2 className="text-lg font-semibold">You&apos;re in!</h2>
             <p className="text-sm text-muted-foreground">
               Your account has been created. Redirecting to login…
             </p>

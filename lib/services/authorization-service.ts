@@ -76,7 +76,7 @@ export class AuthorizationService {
   }
 
   /**
-   * Creates a new authorization request with multi-service support (v2.0)
+   * Creates a new authorization request with multi-service support  
    */
   async createAuthorizationRequest(params: CreateAuthorizationRequestParams) {
     const {
@@ -200,53 +200,77 @@ export class AuthorizationService {
       },
     });
 
-    // Run auto-approval check per item
-    await this.processAuthorizationRequest(authRequest.id);
+    // Run auto-approval check per item – non-critical, never abort main flow
+    try {
+      await this.processAuthorizationRequest(authRequest.id);
+    } catch (e) {
+      console.error("[AuthService] processAuthorizationRequest failed (non-fatal):", e);
+    }
 
-    // Audit log
-    await prisma.auditLog.create({
-      data: {
-        userId: authRequest.requestedBy.userId,
-        action: "AUTHORIZATION_CREATED",
-        entityType: "AuthorizationRequest",
-        entityId: authRequest.id,
-        details: `Authorization request created with code ${authCode} containing ${authRequest.items.length} service item(s)`,
-      },
-    });
+    // Audit log – non-critical
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: authRequest.requestedBy.userId,
+          action: "AUTHORIZATION_CREATED",
+          entityType: "AuthorizationRequest",
+          entityId: authRequest.id,
+          details: `Authorization request created with code ${authCode} containing ${authRequest.items.length} service item(s)`,
+        },
+      });
+    } catch (e) {
+      console.error("[AuthService] Audit log creation failed (non-fatal):", e);
+    }
 
-    // Patient notification
-    await prisma.notification.create({
-      data: {
-        userId: patient.userId,
-        type: "AUTH_REQUEST",
-        title: "New Authorization Request",
-        message: `An authorization request with ${authRequest.items.length} service(s) has been submitted for HMO review.`,
-        relatedEntityId: authRequest.id,
-        relatedEntityType: "AuthorizationRequest",
-      },
-    });
-
-    // HMO Staff notification
-    const hmoStaff = await prisma.hMOStaff.findFirst({
-      where: {
-        hmoId: patient.hmoId,
-      },
-    });
-
-    if (hmoStaff) {
+    // Patient notification – non-critical
+    try {
       await prisma.notification.create({
         data: {
-          userId: hmoStaff.userId,
+          userId: patient.userId,
           type: "AUTH_REQUEST",
           title: "New Authorization Request",
-          message: `A new authorization request with ${authRequest.items.length} service item(s) requires HMO review.`,
+          message: `An authorization request with ${authRequest.items.length} service(s) has been submitted for HMO review.`,
           relatedEntityId: authRequest.id,
           relatedEntityType: "AuthorizationRequest",
         },
       });
+    } catch (e) {
+      console.error("[AuthService] Patient notification failed (non-fatal):", e);
     }
 
-    return authRequest;
+    // HMO Staff notification – non-critical
+    try {
+      const hmoStaff = await prisma.hMOStaff.findFirst({
+        where: { hmoId: patient.hmoId },
+      });
+      if (hmoStaff) {
+        await prisma.notification.create({
+          data: {
+            userId: hmoStaff.userId,
+            type: "AUTH_REQUEST",
+            title: "New Authorization Request",
+            message: `A new authorization request with ${authRequest.items.length} service item(s) requires HMO review.`,
+            relatedEntityId: authRequest.id,
+            relatedEntityType: "AuthorizationRequest",
+          },
+        });
+      }
+    } catch (e) {
+      console.error("[AuthService] HMO staff notification failed (non-fatal):", e);
+    }
+
+    // Return fresh record so caller sees updated status from auto-approval
+    const refreshed = await prisma.authorizationRequest.findUnique({
+      where: { id: authRequest.id },
+      include: {
+        patient: { include: { user: true, coveragePlan: true } },
+        hospital: true,
+        service: true,
+        items: true,
+        requestedBy: { include: { user: true } },
+      },
+    });
+    return refreshed ?? authRequest;
   }
 
   /**
@@ -383,7 +407,7 @@ export class AuthorizationService {
       throw new Error("Authorization service item not found");
     }
 
-    // Update item decision
+    // Update item decision – this is the core write
     const updatedItem = await prisma.authorizationItem.update({
       where: { id: itemId },
       data: {
@@ -394,73 +418,85 @@ export class AuthorizationService {
       },
     });
 
-    // Record in review audit history
-    await prisma.authorizationReview.create({
-      data: {
-        authRequestId: item.authRequestId,
-        reviewedById,
-        decision,
-        comments: `[${item.description}] ${comments || ""}`.trim(),
-      },
-    });
+    // Re-derive overall request status immediately after core write
+    try {
+      const allItems = await prisma.authorizationItem.findMany({
+        where: { authRequestId: item.authRequestId },
+      });
+      const overallStatus = this.deriveRequestStatus(allItems);
+      await prisma.authorizationRequest.update({
+        where: { id: item.authRequestId },
+        data: { status: overallStatus },
+      });
+    } catch (e) {
+      console.error("[AuthService] Failed to re-derive overall request status (non-fatal):", e);
+    }
 
-    // Record system audit log
-    const reviewerStaff = await prisma.hMOStaff.findUnique({
-      where: { id: reviewedById },
-      select: { userId: true },
-    });
-
-    const actionMap: Record<string, "SERVICE_APPROVED" | "SERVICE_REJECTED" | "SERVICE_MORE_INFO_REQUESTED" | "SERVICE_CANCELLED"> = {
-      APPROVED: "SERVICE_APPROVED",
-      AUTO_APPROVED: "SERVICE_APPROVED",
-      REJECTED: "SERVICE_REJECTED",
-      MORE_INFORMATION_REQUIRED: "SERVICE_MORE_INFO_REQUESTED",
-      CANCELLED: "SERVICE_CANCELLED",
-    };
-    const auditAction = actionMap[decision] || "SERVICE_APPROVED";
-
-    await prisma.auditLog.create({
-      data: {
-        userId: reviewerStaff?.userId || null,
-        action: auditAction,
-        entityType: "AuthorizationItem",
-        entityId: itemId,
-        details: `Service item "${item.description}" updated to ${decision} by HMO reviewer. Notes: ${comments || "None"}`,
-      },
-    });
-
-    // Re-derive overall request status
-    const allItems = await prisma.authorizationItem.findMany({
-      where: { authRequestId: item.authRequestId },
-    });
-    const overallStatus = this.deriveRequestStatus(allItems);
-
-    await prisma.authorizationRequest.update({
-      where: { id: item.authRequestId },
-      data: { status: overallStatus },
-    });
-
-    // Notify patient
-    if (item.authRequest.patient) {
-      const decisionLabel =
-        decision === "APPROVED"
-          ? "Approved"
-          : decision === "REJECTED"
-          ? "Rejected"
-          : decision === "MORE_INFORMATION_REQUIRED"
-          ? "Clarification Requested"
-          : decision;
-
-      await prisma.notification.create({
+    // Record in review audit history – non-critical
+    try {
+      await prisma.authorizationReview.create({
         data: {
-          userId: item.authRequest.patient.userId,
-          type: decision === "APPROVED" ? "AUTH_APPROVAL" : "AUTH_REJECTION",
-          title: `Service Decision: ${item.description}`,
-          message: `Your service "${item.description}" was marked as ${decisionLabel} by HMO.${comments ? ` Note: ${comments}` : ""}`,
-          relatedEntityId: item.authRequestId,
-          relatedEntityType: "AuthorizationRequest",
+          authRequestId: item.authRequestId,
+          reviewedById,
+          decision,
+          comments: `[${item.description}] ${comments || ""}`.trim(),
         },
       });
+    } catch (e) {
+      console.error("[AuthService] AuthorizationReview creation failed (non-fatal):", e);
+    }
+
+    // Record system audit log – non-critical
+    try {
+      const reviewerStaff = await prisma.hMOStaff.findUnique({
+        where: { id: reviewedById },
+        select: { userId: true },
+      });
+      const actionMap: Record<string, "SERVICE_APPROVED" | "SERVICE_REJECTED" | "SERVICE_MORE_INFO_REQUESTED" | "SERVICE_CANCELLED"> = {
+        APPROVED: "SERVICE_APPROVED",
+        AUTO_APPROVED: "SERVICE_APPROVED",
+        REJECTED: "SERVICE_REJECTED",
+        MORE_INFORMATION_REQUIRED: "SERVICE_MORE_INFO_REQUESTED",
+        CANCELLED: "SERVICE_CANCELLED",
+      };
+      const auditAction = actionMap[decision] || "SERVICE_APPROVED";
+      await prisma.auditLog.create({
+        data: {
+          userId: reviewerStaff?.userId || null,
+          action: auditAction,
+          entityType: "AuthorizationItem",
+          entityId: itemId,
+          details: `Service item "${item.description}" updated to ${decision} by HMO reviewer. Notes: ${comments || "None"}`,
+        },
+      });
+    } catch (e) {
+      console.error("[AuthService] Audit log for item review failed (non-fatal):", e);
+    }
+
+    // Notify patient – non-critical
+    try {
+      if (item.authRequest.patient) {
+        const decisionLabel =
+          decision === "APPROVED"
+            ? "Approved"
+            : decision === "REJECTED"
+              ? "Rejected"
+              : decision === "MORE_INFORMATION_REQUIRED"
+                ? "Clarification Requested"
+                : decision;
+        await prisma.notification.create({
+          data: {
+            userId: item.authRequest.patient.userId,
+            type: decision === "APPROVED" ? "AUTH_APPROVAL" : "AUTH_REJECTION",
+            title: `Service Decision: ${item.description}`,
+            message: `Your service "${item.description}" was marked as ${decisionLabel} by HMO.${comments ? ` Note: ${comments}` : ""}`,
+            relatedEntityId: item.authRequestId,
+            relatedEntityType: "AuthorizationRequest",
+          },
+        });
+      }
+    } catch (e) {
+      console.error("[AuthService] Patient notification for item review failed (non-fatal):", e);
     }
 
     return updatedItem;

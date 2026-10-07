@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Admin Audit Log Viewer (v2.0).
+ * Admin Audit Log Viewer .
  * Browseable, searchable, filterable paginated view of all system AuditLog records.
  * Compliant with NDPA 12-month minimum retention mandate and immutable record-keeping.
  * Restricted to SYSTEM_ADMIN.

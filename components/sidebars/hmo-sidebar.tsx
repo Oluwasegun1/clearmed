@@ -31,6 +31,7 @@ import {
   LogOut,
   Users,
   ShieldCheck,
+  Layers,
 } from "lucide-react";
 import { UserRole } from "@/lib/enums/UserRole";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -78,14 +79,19 @@ export function HMOSidebar({ currentPath }: HMOSidebarProps) {
       title: "Management",
       items: [
         {
-          title: "Hospital Management",
-          href: "/hmo/hospitals",
-          icon: <Hospital className="h-4 w-4" />,
+          title: "Coverage Plans",
+          href: "/hmo/plans",
+          icon: <Layers className="h-4 w-4" />,
         },
         {
           title: "Patient Management",
           href: "/hmo/patients",
           icon: <UserRound className="h-4 w-4" />,
+        },
+        {
+          title: "Hospital Management",
+          href: "/hmo/hospitals",
+          icon: <Hospital className="h-4 w-4" />,
         },
         {
           title: "Providers",

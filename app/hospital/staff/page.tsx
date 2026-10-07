@@ -71,6 +71,8 @@ interface Department {
   name: string;
 }
 
+export type HospitalRoleType = "DOCTOR" | "HOSPITAL_ADMIN" | "PHARMACY" | "LAB";
+
 interface HospitalStaffMember {
   id: string; // HospitalStaff id
   userId: string;
@@ -79,7 +81,7 @@ interface HospitalStaffMember {
   lastName: string;
   email: string;
   phoneNumber?: string | null;
-  role: "DOCTOR" | "HOSPITAL_ADMIN" | "PHARMACY" | "LAB";
+  role: HospitalRoleType;
   status: "ACTIVE" | "INACTIVE";
   isActive: boolean;
   dateCreated: string;
@@ -748,8 +750,8 @@ export default function HospitalStaffPage() {
                   </Label>
                   <Select
                     value={addForm.role}
-                    onValueChange={(val: any) =>
-                      setAddForm({ ...addForm, role: val })
+                    onValueChange={(val: string) =>
+                      setAddForm({ ...addForm, role: val as HospitalRoleType })
                     }
                   >
                     <SelectTrigger id="role" className="h-9 text-xs">
@@ -957,8 +959,8 @@ export default function HospitalStaffPage() {
                   </Label>
                   <Select
                     value={editForm.role}
-                    onValueChange={(val: any) =>
-                      setEditForm({ ...editForm, role: val })
+                    onValueChange={(val: string) =>
+                      setEditForm({ ...editForm, role: val as HospitalRoleType })
                     }
                   >
                     <SelectTrigger id="editRole" className="h-9 text-xs">

@@ -11,8 +11,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Microscope, Loader2, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+interface LabRecord {
+  id: string;
+  patientName?: string;
+  serviceName?: string;
+  hmoName?: string;
+  requestDate: string;
+}
+
 export default function LabRecordsPage() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<LabRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

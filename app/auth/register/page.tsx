@@ -2,7 +2,7 @@
 
 import type React from "react";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -20,8 +20,30 @@ import {
   CheckCircle,
   AlertCircle,
   XCircle,
+  Building2,
+  CreditCard,
+  Layers,
+  Calendar,
+  Sparkles,
+  Check,
 } from "lucide-react";
 import type { UserRole } from "@/lib/enums/UserRole";
+
+interface HMOOption {
+  id: string;
+  name: string;
+  city: string;
+  state: string;
+  coveragePlans: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+    annualLimit?: number | null;
+    coveragePercent?: number | null;
+    includedServices?: string | null;
+    resetCadence?: string | null;
+  }>;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -33,11 +55,77 @@ export default function RegisterPage() {
     lastName: "",
     phoneNumber: "",
     role: "PATIENT" as UserRole,
+    hmoId: "",
+    membershipNumber: "",
+    coveragePlanId: "",
+    dateOfBirth: "",
+    gender: "",
   });
+  const [hmos, setHmos] = useState<HMOOption[]>([]);
+  const [loadingHmos, setLoadingHmos] = useState(true);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  useEffect(() => {
+    async function loadHMOs() {
+      try {
+        const res = await fetch("/api/hmos");
+        if (res.ok) {
+          const data = await res.json();
+          setHmos(Array.isArray(data) ? data : []);
+          if (Array.isArray(data) && data.length > 0) {
+            setFormData((prev) => ({
+              ...prev,
+              hmoId: prev.hmoId || data[0].id,
+              coveragePlanId:
+                prev.coveragePlanId ||
+                (data[0].coveragePlans && data[0].coveragePlans.length > 0
+                  ? data[0].coveragePlans[0].id
+                  : ""),
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load HMO list:", err);
+      } finally {
+        setLoadingHmos(false);
+      }
+    }
+    loadHMOs();
+  }, []);
+
+  // When selected HMO changes, update default coverage plan
+  const handleHmoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedHmoId = e.target.value;
+    const selectedHmo = hmos.find((h) => h.id === selectedHmoId);
+    const defaultPlanId =
+      selectedHmo?.coveragePlans && selectedHmo.coveragePlans.length > 0
+        ? selectedHmo.coveragePlans[0].id
+        : "";
+
+    setFormData((prev) => ({
+      ...prev,
+      hmoId: selectedHmoId,
+      coveragePlanId: defaultPlanId,
+    }));
+  };
+
+  const parseServices = (raw?: string | null): string[] => {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return raw.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  const selectedHmo = hmos.find((h) => h.id === formData.hmoId);
+  const availablePlans = selectedHmo?.coveragePlans || [];
+  const isMemberIdEntered = formData.membershipNumber.trim().length > 0;
 
   const passwordCriteria = {
     minChar: formData.password.length >= 8,
@@ -60,8 +148,17 @@ export default function RegisterPage() {
     setError("");
 
     // Front-end validations
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phoneNumber || !formData.password || !formData.confirmPassword) {
-      setError("Please fill out all required fields.");
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.email ||
+      !formData.phoneNumber ||
+      !formData.password ||
+      !formData.confirmPassword ||
+      !formData.hmoId ||
+      !formData.membershipNumber
+    ) {
+      setError("Please fill out all required fields, including your HMO and Member ID.");
       setIsLoading(false);
       return;
     }
@@ -86,6 +183,11 @@ export default function RegisterPage() {
           lastName: formData.lastName,
           phoneNumber: formData.phoneNumber,
           role: formData.role,
+          hmoId: formData.hmoId,
+          membershipNumber: formData.membershipNumber,
+          coveragePlanId: formData.coveragePlanId,
+          dateOfBirth: formData.dateOfBirth,
+          gender: formData.gender,
         }),
       });
 
@@ -277,6 +379,191 @@ export default function RegisterPage() {
                     className="w-full pl-10 pr-4 py-3 bg-input border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground"
                     placeholder="Enter your phone number"
                   />
+                </div>
+              </div>
+
+              {/* Health Insurance & HMO Coverage Section */}
+              <div className="p-5 rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent space-y-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-primary/20 text-primary flex items-center justify-center border border-primary/30 shrink-0">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Health Insurance & HMO Verification
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Select your HMO and enter your policy ID to reveal your coverage plans
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Step 1: HMO Selection */}
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="hmoId"
+                      className="text-sm font-medium text-foreground flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span className="flex h-5 w-5 rounded-full bg-primary/20 text-primary text-xs items-center justify-center font-bold">1</span>
+                        Select HMO Provider <span className="text-destructive">*</span>
+                      </span>
+                      {loadingHmos && (
+                        <span className="text-xs text-muted-foreground animate-pulse">Loading HMO list...</span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      <select
+                        id="hmoId"
+                        name="hmoId"
+                        required
+                        value={formData.hmoId}
+                        onChange={handleHmoChange}
+                        disabled={loadingHmos}
+                        className="w-full pl-10 pr-8 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground text-sm cursor-pointer shadow-sm"
+                      >
+                        <option value="">— Select an HMO Provider —</option>
+                        {hmos.map((hmo) => (
+                          <option key={hmo.id} value={hmo.id}>
+                            {hmo.name} {hmo.state ? `(${hmo.state})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Step 2: HMO Member ID Input */}
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="membershipNumber"
+                      className="text-sm font-medium text-foreground flex items-center gap-1.5"
+                    >
+                      <span className="flex h-5 w-5 rounded-full bg-primary/20 text-primary text-xs items-center justify-center font-bold">2</span>
+                      HMO Member ID / Policy Number <span className="text-destructive">*</span>
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        id="membershipNumber"
+                        name="membershipNumber"
+                        type="text"
+                        required
+                        value={formData.membershipNumber}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent transition-all duration-200 text-foreground placeholder:text-muted-foreground text-sm shadow-sm"
+                        placeholder="e.g. HMO-09823471 or Policy ID"
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      This ID is linked to your medical profile and verified by {selectedHmo ? selectedHmo.name : "your HMO"} for claim approvals.
+                    </p>
+                  </div>
+
+                  {/* Step 3: Coverage Plans - ONLY shown when HMO is chosen and Member ID is entered */}
+                  {formData.hmoId && isMemberIdEntered ? (
+                    <div className="pt-3 border-t border-border/60 space-y-3 animate-in fade-in-50 slide-in-from-top-2 duration-300">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                          <span className="flex h-5 w-5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs items-center justify-center font-bold">3</span>
+                          Available Coverage Plans for {selectedHmo?.name}
+                        </label>
+                        <Badge variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                          ID Provided
+                        </Badge>
+                      </div>
+
+                      {availablePlans.length === 0 ? (
+                        <div className="p-4 rounded-xl border border-dashed border-border/80 bg-background/50 text-center space-y-1">
+                          <p className="text-xs font-medium text-foreground">Standard HMO Coverage</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            This HMO has not published separate tier packages. General HMO coverage will be automatically applied.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {availablePlans.map((plan) => {
+                            const isSelected = formData.coveragePlanId === plan.id;
+                            const services = parseServices(plan.includedServices);
+                            return (
+                              <div
+                                key={plan.id}
+                                onClick={() => setFormData((prev) => ({ ...prev, coveragePlanId: plan.id }))}
+                                className={`relative flex flex-col justify-between p-3.5 rounded-xl border-2 transition-all cursor-pointer text-left shadow-sm ${
+                                  isSelected
+                                    ? "border-primary bg-primary/10 shadow-md ring-1 ring-primary"
+                                    : "border-border/70 bg-background/80 hover:border-primary/50 hover:bg-card"
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                                    <h4 className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                                      {plan.name}
+                                    </h4>
+                                    <Badge
+                                      variant={isSelected ? "default" : "secondary"}
+                                      className="text-[10px] font-mono px-1.5 py-0 shrink-0"
+                                    >
+                                      {plan.coveragePercent ?? 100}% Cover
+                                    </Badge>
+                                  </div>
+
+                                  {plan.description && (
+                                    <p className="text-[11px] text-muted-foreground line-clamp-2 mb-2">
+                                      {plan.description}
+                                    </p>
+                                  )}
+
+                                  {services.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                      {services.slice(0, 3).map((s) => (
+                                        <span
+                                          key={s}
+                                          className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                                        >
+                                          {s}
+                                        </span>
+                                      ))}
+                                      {services.length > 3 && (
+                                        <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">
+                                          +{services.length - 3} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs pt-2 border-t border-border/40 mt-1">
+                                  <span className="text-muted-foreground text-[11px]">
+                                    Limit: <strong className="text-foreground">{plan.annualLimit ? `₦${plan.annualLimit.toLocaleString()}` : "Unlimited"}</strong>
+                                  </span>
+                                  <div className="flex items-center gap-1 font-medium text-primary text-[11px]">
+                                    {isSelected ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5" /> Selected
+                                      </>
+                                    ) : (
+                                      <span className="text-muted-foreground hover:text-foreground">Select</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-muted/40 rounded-xl border border-dashed border-border/70 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>
+                        {!formData.hmoId
+                          ? "Select an HMO provider and enter your Member ID above to view your plans."
+                          : "Enter your HMO Member ID above to reveal and choose your coverage plan."}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

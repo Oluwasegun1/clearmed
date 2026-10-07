@@ -1,5 +1,5 @@
 /**
- * ClearMed Standardized User-Facing Error Messages and Sanitizer (v2.0)
+ * ClearMed Standardized User-Facing Error Messages and Sanitizer  
  * Ensures technical/sensitive internals are never leaked to end users.
  */
 

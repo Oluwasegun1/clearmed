@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * HMO Dashboard (ClearMed v2.0).
+ * HMO Dashboard (ClearMed).
  *
  * Overview:
  * • Total enrolled patients
@@ -43,9 +43,12 @@ import {
   PageHeader,
   MetricCard,
   ProgressBar,
+  DateRangeFilter,
+  DateRangeValue,
 } from "@/components/shared";
 import {
   ClipboardCheck,
+  ClipboardList,
   RefreshCw,
   AlertCircle,
   CheckCircle2,
@@ -64,8 +67,13 @@ import {
   History,
   Shield,
   ArrowUpDown,
+  Activity,
+  Layers,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { HMOPlanSetupModal } from "@/components/hmo";
 
 interface ServiceQueueItem {
   id: string; // item id
@@ -180,6 +188,14 @@ export default function HMODashboardPage() {
   const [data, setData] = useState<HMODashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Date range filter state
+  const [dateRange, setDateRange] = useState<DateRangeValue>({
+    preset: "all",
+    startDate: "",
+    endDate: "",
+  });
 
   // Queue filter & sort state
   const [search, setSearch] = useState("");
@@ -192,23 +208,57 @@ export default function HMODashboardPage() {
   const [itemDecisionNotes, setItemDecisionNotes] = useState<Record<string, string>>({});
   const [submittingItemId, setSubmittingItemId] = useState<string | null>(null);
 
-  const fetchDashboardData = useCallback(async () => {
-    setLoading(true);
+  // Coverage Plan Setup state
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [plansCount, setPlansCount] = useState<number | null>(null);
+
+  const checkPlans = useCallback(async () => {
+    try {
+      const res = await fetch("/api/hmo/coverage-plans");
+      if (res.ok) {
+        const plans = await res.json();
+        const count = Array.isArray(plans) ? plans.length : 0;
+        setPlansCount(count);
+        // If url has setup=true or user has 0 plans, open setup modal
+        if (typeof window !== "undefined") {
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get("setup") === "true" || count === 0) {
+            setSetupModalOpen(true);
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    checkPlans();
+  }, [checkPlans]);
+
+  const fetchDashboardData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/hmo/dashboard");
       if (!res.ok) throw new Error("Failed to load HMO dashboard data");
       const result = await res.json();
       setData(result);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error loading dashboard");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(false);
+    // Silent auto-refresh polling every 25 seconds
+    const interval = setInterval(() => {
+      fetchDashboardData(true);
+    }, 25_000);
+    return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
   // Open Section 18 Review Modal
@@ -271,7 +321,7 @@ export default function HMODashboardPage() {
       }
 
       // Refresh dashboard queue & metrics
-      fetchDashboardData();
+      fetchDashboardData(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error saving review decision");
     } finally {
@@ -291,12 +341,84 @@ export default function HMODashboardPage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [data?.queue]);
 
+  // Date-filtered source items for metrics calculation
+  const dateFilteredItems = useMemo(() => {
+    if (!data?.queue) return [];
+    if (!dateRange.startDate && !dateRange.endDate) return data.queue;
+
+    return data.queue.filter((item) => {
+      const itemDate = new Date(item.requestDate).toISOString().split("T")[0];
+      if (dateRange.startDate && itemDate < dateRange.startDate) return false;
+      if (dateRange.endDate && itemDate > dateRange.endDate) return false;
+      return true;
+    });
+  }, [data?.queue, dateRange]);
+
+  // Comprehensive Total Metrics calculation
+  const metrics = useMemo(() => {
+    const isDateFiltered = Boolean(dateRange.startDate || dateRange.endDate);
+    const sourceItems = isDateFiltered ? dateFilteredItems : (data?.queue || []);
+
+    const distinctRequests = new Set(sourceItems.map((i) => i.requestId)).size;
+    const totalServices = sourceItems.length;
+
+    if (!isDateFiltered && data) {
+      return {
+        totalRequests: distinctRequests,
+        totalServices:
+          data.pendingAuthorizations +
+          data.approvedAuthorizations +
+          data.moreInfoAuthorizations +
+          data.rejectedAuthorizations +
+          data.completedAuthorizations,
+        pending: data.pendingAuthorizations,
+        approved: data.approvedAuthorizations,
+        moreInfo: data.moreInfoAuthorizations,
+        rejected: data.rejectedAuthorizations,
+        completed: data.completedAuthorizations,
+        isDateFiltered: false,
+      };
+    }
+
+    let pending = 0;
+    let approved = 0;
+    let moreInfo = 0;
+    let rejected = 0;
+    let completed = 0;
+
+    sourceItems.forEach((item) => {
+      if (item.status === "PENDING") pending++;
+      else if (item.status === "APPROVED" || item.status === "AUTO_APPROVED") approved++;
+      else if (item.status === "MORE_INFORMATION_REQUIRED") moreInfo++;
+      else if (item.status === "REJECTED") rejected++;
+      else if (item.status === "COMPLETED") completed++;
+    });
+
+    return {
+      totalRequests: distinctRequests,
+      totalServices,
+      pending,
+      approved,
+      moreInfo,
+      rejected,
+      completed,
+      isDateFiltered,
+    };
+  }, [data, dateRange, dateFilteredItems]);
+
   // Filter & sort service queue
   const filteredQueue = useMemo(() => {
     if (!data?.queue) return [];
 
     return data.queue
       .filter((item) => {
+        // Date range filter
+        if (dateRange.startDate || dateRange.endDate) {
+          const itemDate = new Date(item.requestDate).toISOString().split("T")[0];
+          if (dateRange.startDate && itemDate < dateRange.startDate) return false;
+          if (dateRange.endDate && itemDate > dateRange.endDate) return false;
+        }
+
         // Search filter
         const q = search.toLowerCase();
         const matchesSearch =
@@ -336,7 +458,7 @@ export default function HMODashboardPage() {
         }
         return 0;
       });
-  }, [data?.queue, search, statusFilter, hospitalFilter, sortBy]);
+  }, [data?.queue, search, statusFilter, hospitalFilter, sortBy, dateRange]);
 
   // Queue table columns
   const queueColumns: Column<ServiceQueueItem>[] = [
@@ -439,18 +561,36 @@ export default function HMODashboardPage() {
       <PageShell>
         <PageHeader
           title="HMO Management Dashboard"
-          subtitle={`Health Coverage Overview & Authorization Queue • ${data?.hmoName || "ClearMed HMO"}`}
+          subtitle={`Health Coverage Overview & Authorization Queue • ${data?.hmoName || "ClearMed HMO"}${
+            lastUpdated ? ` • Updated ${lastUpdated.toLocaleTimeString()}` : ""
+          }`}
           actions={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchDashboardData}
-              disabled={loading}
-              className="gap-2 shrink-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh Data
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSetupModalOpen(true)}
+                className="gap-1.5 shrink-0 h-9 border-primary/30 text-primary hover:bg-primary/10"
+              >
+                <Sparkles className="h-4 w-4 text-amber-500" />
+                Coverage Plans {plansCount !== null ? `(${plansCount})` : ""}
+              </Button>
+              <DateRangeFilter
+                value={dateRange}
+                onChange={setDateRange}
+                compact
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchDashboardData(false)}
+                disabled={loading}
+                className="gap-2 shrink-0 h-9"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Refresh Data
+              </Button>
+            </div>
           }
         />
 
@@ -463,50 +603,110 @@ export default function HMODashboardPage() {
             </Alert>
           )}
 
-          {/* Overview Metrics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <MetricCard
-              label="Enrolled Patients"
-              value={data ? data.totalEnrolledPatients.toLocaleString() : "—"}
-              badge="Enrolled"
-              icon={Users}
-              iconColor="primary"
-            />
-            <MetricCard
-              label="Pending Services"
-              value={data ? data.pendingAuthorizations.toLocaleString() : "—"}
-              badge="Queue"
-              icon={Clock}
-              iconColor="amber"
-            />
-            <MetricCard
-              label="Approved Services"
-              value={data ? data.approvedAuthorizations.toLocaleString() : "—"}
-              badge="Approved"
-              icon={CheckCircle2}
-              iconColor="green"
-            />
-            <MetricCard
-              label="Clarification Needed"
-              value={data ? data.moreInfoAuthorizations.toLocaleString() : "—"}
-              badge="Action"
-              icon={FileQuestion}
-              iconColor="purple"
-            />
-            <MetricCard
-              label="Rejected Services"
-              value={data ? data.rejectedAuthorizations.toLocaleString() : "—"}
-              badge="Declined"
-              icon={XCircle}
-              iconColor="red"
-            />
-            <MetricCard
-              label="Completed (Claimed)"
-              value={data ? data.completedAuthorizations.toLocaleString() : "—"}
-              badge="Fulfilled"
-              icon={CheckCheck}
-              iconColor="blue"
-            />
+          {/* Setup Banner if no plans exist */}
+          {plansCount === 0 && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-xl gap-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                  <Sparkles className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">Welcome to ClearMed HMO! Set up your Coverage Plans</h3>
+                  <p className="text-xs text-muted-foreground">
+                    You have not configured any health coverage plans yet. Set up your plans so patients can select your HMO and enroll with their Member ID.
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setSetupModalOpen(true)}
+                size="sm"
+                className="gap-2 shrink-0 bg-primary text-primary-foreground shadow-sm"
+              >
+                <Plus className="h-4 w-4" /> Set Up Plans
+              </Button>
+            </div>
+          )}
+
+          {/* Total Metrics Board */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Activity className="h-4 w-4 text-primary" /> Metrics & Performance Summary
+                </h2>
+                {metrics.isDateFiltered && (
+                  <Badge variant="outline" className="text-[11px] font-semibold bg-primary/10 text-primary border-primary/20">
+                    Filtered: {dateRange.startDate || "Beginning"} → {dateRange.endDate || "Present"}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <DateRangeFilter
+                  value={dateRange}
+                  onChange={setDateRange}
+                  compact
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricCard
+                label="Total Requests"
+                value={data ? metrics.totalRequests.toLocaleString() : "—"}
+                badge="Requests"
+                icon={ClipboardList}
+                iconColor="primary"
+              />
+              <MetricCard
+                label="Total Services"
+                value={data ? metrics.totalServices.toLocaleString() : "—"}
+                badge="All Volume"
+                icon={Layers}
+                iconColor="blue"
+              />
+              <MetricCard
+                label="Enrolled Patients"
+                value={data ? data.totalEnrolledPatients.toLocaleString() : "—"}
+                badge="Enrolled"
+                icon={Users}
+                iconColor="primary"
+              />
+              <MetricCard
+                label="Pending Services"
+                value={data ? metrics.pending.toLocaleString() : "—"}
+                badge="Queue"
+                icon={Clock}
+                iconColor="amber"
+              />
+              <MetricCard
+                label="Approved Services"
+                value={data ? metrics.approved.toLocaleString() : "—"}
+                badge="Approved"
+                icon={CheckCircle2}
+                iconColor="green"
+              />
+              <MetricCard
+                label="Clarification Needed"
+                value={data ? metrics.moreInfo.toLocaleString() : "—"}
+                badge="Action"
+                icon={FileQuestion}
+                iconColor="purple"
+              />
+              <MetricCard
+                label="Rejected Services"
+                value={data ? metrics.rejected.toLocaleString() : "—"}
+                badge="Declined"
+                icon={XCircle}
+                iconColor="red"
+              />
+              <MetricCard
+                label="Completed (Claimed)"
+                value={data ? metrics.completed.toLocaleString() : "—"}
+                badge="Fulfilled"
+                icon={CheckCheck}
+                iconColor="blue"
+              />
+            </div>
           </div>
 
           {/* Coverage Utilization Card */}
@@ -617,12 +817,20 @@ export default function HMODashboardPage() {
                     setSearch("");
                     setStatusFilter("ALL");
                     setHospitalFilter("ALL");
+                    setDateRange({ preset: "all", startDate: "", endDate: "" });
                   }}
                 />
               </div>
 
               {/* Secondary Hospital & Sort Selectors */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                {/* Date Filter */}
+                <DateRangeFilter
+                  value={dateRange}
+                  onChange={setDateRange}
+                  compact
+                />
+
                 {/* Hospital Filter */}
                 {hospitalOptions.length > 0 && (
                   <select
@@ -905,6 +1113,16 @@ export default function HMODashboardPage() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Coverage Plan Setup Modal */}
+        <HMOPlanSetupModal
+          open={setupModalOpen}
+          onOpenChange={setSetupModalOpen}
+          onPlansUpdated={() => {
+            checkPlans();
+            fetchDashboardData(true);
+          }}
+        />
       </PageShell>
     </HMOSidebarWrapper>
   );

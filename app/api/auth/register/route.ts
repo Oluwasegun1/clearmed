@@ -12,7 +12,20 @@ import { validatePasswordPolicy, isValidEmail } from "@/lib/password-policy";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, confirmPassword, firstName, lastName, phoneNumber } = body;
+    const {
+      email,
+      password,
+      confirmPassword,
+      firstName,
+      lastName,
+      phoneNumber,
+      hmoId,
+      membershipNumber: userMembershipNumber,
+      coveragePlanId,
+      dateOfBirth,
+      gender,
+      address,
+    } = body;
 
     // 1. Validate required fields
     if (!firstName || !lastName || !email || !phoneNumber || !password || !confirmPassword) {
@@ -38,11 +51,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Validate password policy (v2.0)
+    // 4. Validate password policy  
     const passwordValidation = validatePasswordPolicy(password);
     if (!passwordValidation.isValid) {
       return NextResponse.json(
-        { 
+        {
           message: passwordValidation.errors.join(" "),
           errors: passwordValidation.errors,
         },
@@ -62,20 +75,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 6. Securely hash password and create user with PATIENT role
-    const user = await registerUser({
-      email: email.trim().toLowerCase(),
-      password,
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phoneNumber: phoneNumber.trim(),
-      role: validRole,
+    // 6. Check HMO Member ID uniqueness if provided
+    const targetMembershipNumber = userMembershipNumber?.trim() || `CM-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
+    const existingMember = await prisma.patient.findUnique({
+      where: { membershipNumber: targetMembershipNumber },
     });
+    if (existingMember) {
+      return NextResponse.json(
+        { message: `The HMO Member ID "${targetMembershipNumber}" is already registered. Please check your policy ID or contact your HMO.` },
+        { status: 409 }
+      );
+    }
 
-    // Attach to a default HMO + Coverage Plan
-    let hmo = await prisma.hMO.findFirst();
-    if (!hmo) {
-      hmo = await prisma.hMO.create({
+    // 7. Resolve target HMO
+    let targetHmo = null;
+    if (hmoId) {
+      targetHmo = await prisma.hMO.findUnique({ where: { id: hmoId } });
+    }
+    if (!targetHmo) {
+      targetHmo = await prisma.hMO.findFirst({ where: { isActive: true } });
+    }
+    if (!targetHmo) {
+      targetHmo = await prisma.hMO.create({
         data: {
           name: "ClearMed Primary Health",
           address: "1 Medical Way",
@@ -88,39 +109,91 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let plan = await prisma.coveragePlan.findFirst({ where: { hmoId: hmo.id } });
-    if (!plan) {
-      plan = await prisma.coveragePlan.create({
+    // 8. Resolve target Coverage Plan
+    let targetPlan = null;
+    if (coveragePlanId) {
+      targetPlan = await prisma.coveragePlan.findFirst({
+        where: { id: coveragePlanId, hmoId: targetHmo.id },
+      });
+    }
+    if (!targetPlan) {
+      targetPlan = await prisma.coveragePlan.findFirst({
+        where: { hmoId: targetHmo.id, isActive: true },
+      });
+    }
+    if (!targetPlan) {
+      targetPlan = await prisma.coveragePlan.create({
         data: {
-          hmoId: hmo.id,
+          hmoId: targetHmo.id,
           name: "Standard Care Plan",
           description: "Full primary care & specialist coverage",
+          annualLimit: 500000,
+          coveragePercent: 85,
         },
       });
     }
 
-    const membershipNumber = `CM-PAT-${Math.floor(100000 + Math.random() * 900000)}`;
+    // 9. Securely hash password and create user with PATIENT role
+    const user = await registerUser({
+      email: email.trim().toLowerCase(),
+      password,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phoneNumber: phoneNumber.trim(),
+      role: validRole,
+    });
+
+    // 10. Create Patient profile
+    const parsedDob = dateOfBirth ? new Date(dateOfBirth) : new Date("1995-01-01");
+    const validDob = isNaN(parsedDob.getTime()) ? new Date("1995-01-01") : parsedDob;
+
     await prisma.patient.create({
       data: {
         userId: user.id,
-        hmoId: hmo.id,
-        membershipNumber,
-        coveragePlanId: plan.id,
-        dateOfBirth: new Date("1995-01-01"),
-        gender: "Prefer not to say",
-        address: "Lagos, Nigeria",
+        hmoId: targetHmo.id,
+        membershipNumber: targetMembershipNumber,
+        coveragePlanId: targetPlan.id,
+        dateOfBirth: validDob,
+        gender: gender?.trim() || "Prefer not to say",
+        address: address?.trim() || "Nigeria",
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "USER_CREATED",
-        entityType: "User",
-        entityId: user.id,
-        details: `Patient account created (${user.email})`,
-      },
-    });
+    // 11. Create Audit Log
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "USER_CREATED",
+          entityType: "User",
+          entityId: user.id,
+          details: `Patient account created (${user.email}) under HMO "${targetHmo.name}" with Member ID ${targetMembershipNumber}`,
+        },
+      });
+    } catch {
+      // Non-blocking
+    }
+
+    // 12. Notify HMO Staff of new enrollment
+    try {
+      const hmoStaff = await prisma.hMOStaff.findFirst({
+        where: { hmoId: targetHmo.id },
+      });
+      if (hmoStaff) {
+        await prisma.notification.create({
+          data: {
+            userId: hmoStaff.userId,
+            type: "COVERAGE_UPDATE",
+            title: "New Patient Member Registration",
+            message: `${firstName} ${lastName} has registered under ${targetHmo.name} with Member ID ${targetMembershipNumber}.`,
+            relatedEntityId: user.id,
+            relatedEntityType: "Patient",
+          },
+        });
+      }
+    } catch {
+      // Non-blocking
+    }
 
     return NextResponse.json(
       {
@@ -131,6 +204,8 @@ export async function POST(req: NextRequest) {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
+          hmoName: targetHmo.name,
+          membershipNumber: targetMembershipNumber,
         },
       },
       { status: 201 }

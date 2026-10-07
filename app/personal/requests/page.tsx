@@ -5,7 +5,7 @@
  * Hospital requests and HMO inquiries are visually distinct with type badges and icons.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PersonalSidebarWrapper } from "@/components/sidebars";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   FlaskConical,
   Stethoscope,
   Pill,
+  RefreshCw,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AuthStatus } from "@/lib/enums/AuthStatus";
@@ -230,45 +231,57 @@ export default function MyRequestsPage() {
   const router = useRouter();
   const [requests, setRequests] = useState<AnyRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchAll = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    else setIsRefreshing(true);
+    setError("");
+    try {
+      // Fetch hospital authorization requests
+      const [authRes, inquiryRes] = await Promise.all([
+        fetch(`/api/authorizations?status=${activeTab}`),
+        fetch(`/api/requests/coverage-inquiry?status=${activeTab}`),
+      ]);
+
+      const authData = authRes.ok ? await authRes.json() : [];
+      // inquiryRes may 403 if user is not PATIENT – treat gracefully
+      const inquiryData = inquiryRes.ok ? await inquiryRes.json() : [];
+
+      const hospitalRequests: HospitalRequest[] = (
+        Array.isArray(authData) ? authData : []
+      ).map((r: Omit<HospitalRequest, "type">) => ({ ...r, type: "hospital" as const }));
+
+      const hmoInquiries: HmoInquiry[] = Array.isArray(inquiryData) ? inquiryData : [];
+
+      // Merge and sort by createdAt descending
+      const merged: AnyRequest[] = [...hospitalRequests, ...hmoInquiries].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setRequests(merged);
+      setLastUpdated(new Date());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load requests");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
-    const fetchAll = async () => {
-      setIsLoading(true);
-      setError("");
-      try {
-        // Fetch hospital authorization requests
-        const [authRes, inquiryRes] = await Promise.all([
-          fetch(`/api/authorizations?status=${activeTab}`),
-          fetch(`/api/requests/coverage-inquiry?status=${activeTab}`),
-        ]);
-
-        const authData = authRes.ok ? await authRes.json() : [];
-        // inquiryRes may 403 if user is not PATIENT – treat gracefully
-        const inquiryData = inquiryRes.ok ? await inquiryRes.json() : [];
-
-        const hospitalRequests: HospitalRequest[] = (
-          Array.isArray(authData) ? authData : []
-        ).map((r: Omit<HospitalRequest, "type">) => ({ ...r, type: "hospital" as const }));
-
-        const hmoInquiries: HmoInquiry[] = Array.isArray(inquiryData) ? inquiryData : [];
-
-        // Merge and sort by createdAt descending
-        const merged: AnyRequest[] = [...hospitalRequests, ...hmoInquiries].sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-
-        setRequests(merged);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load requests");
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchAll();
-  }, [activeTab]);
+    // Auto-refresh every 30 seconds
+    intervalRef.current = setInterval(() => fetchAll(true), 30_000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [fetchAll]);
 
   return (
     <PersonalSidebarWrapper currentPath="/personal/requests">
@@ -283,15 +296,32 @@ export default function MyRequestsPage() {
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   Hospital authorization requests and HMO coverage inquiries
+                  {lastUpdated && (
+                    <span className="ml-2 text-xs opacity-60">
+                      · Updated {lastUpdated.toLocaleTimeString()}
+                    </span>
+                  )}
                 </p>
               </div>
-              <Button
-                onClick={() => router.push("/personal/request/new")}
-                className="h-9"
-              >
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Make a Request
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => fetchAll(false)}
+                  disabled={isLoading || isRefreshing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+                <Button
+                  onClick={() => router.push("/personal/request/new")}
+                  className="h-9"
+                >
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  Make a Request
+                </Button>
+              </div>
             </div>
           </div>
         </div>

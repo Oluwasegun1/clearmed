@@ -1,5 +1,6 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/auth-options";
+export { authOptions };
 import { UserRole } from "@/lib/enums/UserRole";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";

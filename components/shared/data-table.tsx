@@ -95,7 +95,7 @@ export function DataTable<T>({
             {data.map((item, rowIndex) => {
               const rowKey = keyExtractor
                 ? keyExtractor(item, rowIndex)
-                : (item as any)?.id || rowIndex;
+                : ((item as Record<string, unknown>)?.id as string | number) || rowIndex;
 
               return (
                 <TableRow
@@ -105,7 +105,7 @@ export function DataTable<T>({
                 >
                   {columns.map((col, colIndex) => {
                     const value = col.accessorKey
-                      ? (item as any)[col.accessorKey]
+                      ? ((item as Record<string, unknown>)[col.accessorKey as string] as React.ReactNode)
                       : undefined;
 
                     return (

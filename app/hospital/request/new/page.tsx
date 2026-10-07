@@ -86,7 +86,7 @@ export default function DoctorCreateRequestPage() {
   const [diagnosisCode, setDiagnosisCode] = useState("");
   const [overallDiagnosisNotes, setOverallDiagnosisNotes] = useState("");
 
-  // Multi-service line items (v2.0)
+  // Multi-service line items  
   const [items, setItems] = useState<ServiceLineItem[]>([
     {
       id: "item-1",
@@ -202,7 +202,7 @@ export default function DoctorCreateRequestPage() {
     setItems((prev) => prev.filter((i) => i.id !== id));
   };
 
-  const updateItem = (id: string, field: keyof ServiceLineItem, value: any) => {
+  const updateItem = <K extends keyof ServiceLineItem>(id: string, field: K, value: ServiceLineItem[K]) => {
     setItems((prev) =>
       prev.map((i) => {
         if (i.id !== id) return i;
@@ -212,7 +212,7 @@ export default function DoctorCreateRequestPage() {
           if (matched) {
             return {
               ...i,
-              serviceId: value,
+              serviceId: value as string,
               description: matched.name,
               category: matched.category,
               cost: matched.standardPrice,

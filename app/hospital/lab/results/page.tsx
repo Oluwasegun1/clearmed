@@ -46,7 +46,7 @@ export default function LabResultsUploadPage() {
           <Alert className="bg-green-500/10 border-green-500/30">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
             <AlertTitle>Results Saved!</AlertTitle>
-            <AlertDescription>The lab investigation result has been uploaded to the patient's record.</AlertDescription>
+            <AlertDescription>The lab investigation result has been uploaded to the patient&apos;s record.</AlertDescription>
           </Alert>
         )}
 

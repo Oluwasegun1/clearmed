@@ -551,7 +551,7 @@ function CoveragePlansTab({ hmoId }: { hmoId: string }) {
 
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="plan-reset" className="flex items-center gap-1.5">
-                    <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" /> Annual Limit Reset Cadence (v2.0)
+                    <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" /> Annual Limit Reset Cadence
                   </Label>
                   <Select
                     value={newPlan.resetCadence}

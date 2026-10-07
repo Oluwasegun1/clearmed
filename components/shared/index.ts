@@ -9,3 +9,4 @@ export * from "./empty-state";
 export * from "./confirm-dialog";
 export * from "./search-filter-bar";
 export * from "./data-table";
+export * from "./date-range-filter";

@@ -83,7 +83,7 @@ export default function OrgSignupPage() {
       setSuccess(true);
       // Redirect after short delay so user sees success state
       setTimeout(() => {
-        router.push(orgType === "HOSPITAL" ? "/hospital/dashboard" : "/hmo/dashboard");
+        router.push(orgType === "HOSPITAL" ? "/hospital/dashboard" : "/hmo/dashboard?setup=true");
       }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

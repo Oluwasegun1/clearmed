@@ -20,7 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { SearchFilterBar, DataTable, StatusBadge, Column } from "@/components/shared";
+import { SearchFilterBar, DataTable, StatusBadge, Column, DateRangeFilter, DateRangeValue } from "@/components/shared";
 import {
   ClipboardCheck,
   RefreshCw,
@@ -104,13 +104,21 @@ export default function HMORequestsPage() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState("ALL");
   const [selected, setSelected] = useState<ReviewRequestDetail | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Date range filter state
+  const [dateRange, setDateRange] = useState<DateRangeValue>({
+    preset: "all",
+    startDate: "",
+    endDate: "",
+  });
 
   // Per-item review notes state
   const [itemNotes, setItemNotes] = useState<Record<string, string>>({});
   const [submittingItemId, setSubmittingItemId] = useState<string | null>(null);
 
-  const fetchRequests = useCallback(async () => {
-    setLoading(true);
+  const fetchRequests = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const qs = statusTab !== "ALL" ? `?status=${statusTab}` : "";
@@ -118,15 +126,21 @@ export default function HMORequestsPage() {
       if (!res.ok) throw new Error("Failed to load authorization requests");
       const data = await res.json();
       setRequests(Array.isArray(data) ? data : []);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [statusTab]);
 
   useEffect(() => {
-    fetchRequests();
+    fetchRequests(false);
+    // Silent auto-refresh every 25s
+    const interval = setInterval(() => {
+      fetchRequests(true);
+    }, 25_000);
+    return () => clearInterval(interval);
   }, [fetchRequests]);
 
   // Fetch full detail when a row is selected
@@ -187,7 +201,7 @@ export default function HMORequestsPage() {
         const refreshedData = await refreshedRes.json();
         setSelected(refreshedData);
       }
-      fetchRequests();
+      fetchRequests(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit service review");
     } finally {
@@ -196,6 +210,16 @@ export default function HMORequestsPage() {
   };
 
   const filtered = requests.filter((r) => {
+    // Date range filter
+    if (dateRange.startDate || dateRange.endDate) {
+      const itemDateStr = r.requestDate || r.createdAt;
+      if (itemDateStr) {
+        const itemDate = new Date(itemDateStr).toISOString().split("T")[0];
+        if (dateRange.startDate && itemDate < dateRange.startDate) return false;
+        if (dateRange.endDate && itemDate > dateRange.endDate) return false;
+      }
+    }
+
     const q = search.toLowerCase();
     const anyField = JSON.stringify(r).toLowerCase();
     return anyField.includes(q);
@@ -300,6 +324,11 @@ export default function HMORequestsPage() {
               <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
                 v2.0 Service-Level Review Queue
               </Badge>
+              {lastUpdated && (
+                <span className="text-xs text-muted-foreground">
+                  Updated {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
             </div>
             <h1 className="text-2xl font-semibold flex items-center gap-2 mt-1">
               <ClipboardCheck className="h-6 w-6 text-primary" />
@@ -309,16 +338,23 @@ export default function HMORequestsPage() {
               Review pre-authorization requests and make independent decisions per service line item
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchRequests}
-            disabled={loading}
-            className="gap-2 shrink-0"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <DateRangeFilter
+              value={dateRange}
+              onChange={setDateRange}
+              compact
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchRequests(false)}
+              disabled={loading}
+              className="gap-2 shrink-0 h-9"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="relative p-6 max-w-7xl mx-auto space-y-6">
@@ -366,9 +402,17 @@ export default function HMORequestsPage() {
             statusFilter={statusTab}
             onStatusFilterChange={setStatusTab}
             statusOptions={STATUS_OPTIONS}
+            extraFilters={
+              <DateRangeFilter
+                value={dateRange}
+                onChange={setDateRange}
+                compact
+              />
+            }
             onResetFilters={() => {
               setSearch("");
               setStatusTab("ALL");
+              setDateRange({ preset: "all", startDate: "", endDate: "" });
             }}
           />
 

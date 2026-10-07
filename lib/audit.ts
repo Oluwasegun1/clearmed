@@ -1,5 +1,5 @@
 /**
- * ClearMed Audit Logging System (v2.0)
+ * ClearMed Audit Logging System  
  * NDPA 12-month retention compliant immutable audit trail.
  */
 
