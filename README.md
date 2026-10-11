@@ -44,7 +44,8 @@ Open [http://localhost:3001](http://localhost:3001).
 Create `.env.local` with the following values:
 
 ```bash
-DATABASE_URL="file:./prisma/dev.db"
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://USER:PASSWORD@HOST:5432/postgres"
 NEXTAUTH_URL="http://localhost:3001"
 NEXTAUTH_SECRET="replace-with-a-long-random-secret"
 NEXT_PUBLIC_ENABLE_DEMO_LOGIN="true"
@@ -52,7 +53,8 @@ NEXT_PUBLIC_ENABLE_DEMO_LOGIN="true"
 
 Notes:
 
-- `DATABASE_URL` points Prisma to the local SQLite database.
+- `DATABASE_URL` is the pooled PostgreSQL connection (Supabase used as DB host only); `DIRECT_URL` is the direct connection used by `prisma migrate`.
+- Set `NEXT_PUBLIC_ENABLE_DEMO_LOGIN="false"` in production. See `.env.example`.
 - `NEXTAUTH_URL` must match the local port used by the app.
 - `NEXTAUTH_SECRET` is required for stable login sessions.
 - `NEXT_PUBLIC_ENABLE_DEMO_LOGIN` shows seeded quick-login options on the login page.

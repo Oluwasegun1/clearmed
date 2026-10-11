@@ -43,6 +43,9 @@ interface DemoRole {
   badgeColor: string;
 }
 
+// Demo quick-login is controlled purely by environment (set to "false" in production).
+const DEMO_LOGIN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGIN === "true";
+
 const DEMO_ROLES: DemoRole[] = [
   {
     id: "patient",
@@ -181,7 +184,7 @@ function LoginContent() {
 
   // Set default credentials based on role query parameter or preset
   useEffect(() => {
-    if (roleParam) {
+    if (DEMO_LOGIN_ENABLED && roleParam) {
       const demo = DEMO_ROLES.find(
         (r) => r.id === roleParam || r.roleCode.toLowerCase() === roleParam.toLowerCase()
       );
@@ -195,6 +198,7 @@ function LoginContent() {
 
   // Handle demo role pill click for instant sign-in
   const selectDemoRole = (role: DemoRole) => {
+    if (!DEMO_LOGIN_ENABLED) return;
     setEmail(role.email);
     setPassword("password123");
     setSelectedDemoRole(role.id);
@@ -359,6 +363,7 @@ function LoginContent() {
           </div>
 
           {/* Quick Demo Role Switcher */}
+          {DEMO_LOGIN_ENABLED && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3 px-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -414,6 +419,7 @@ function LoginContent() {
               })}
             </div>
           </div>
+          )}
 
           {/* Login Form */}
           <Card className="glass-card p-6 md:p-8">
